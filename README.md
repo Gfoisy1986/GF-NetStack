@@ -167,6 +167,184 @@ A Fortran server capable of handling multiple agents simultaneously.
 
 ---
 
+# 🐧 **Ubuntu — Installation complète**
+
+### ✅ **1. Mettre à jour le système**
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
+### ✅ **2. Installer gcc, gfortran et binutils**
+```bash
+sudo apt install -y gcc gfortran binutils make
+```
+
+### 📦 Ce que ça installe réellement
+| Paquet | Rôle |
+|--------|------|
+| **gcc** | Compilateur C (nécessaire pour beaucoup de libs) |
+| **gfortran** | Compilateur Fortran 95/2003/2008 |
+| **binutils** | `ld`, `as`, `objdump`, `ar`, etc. |
+| **make** | (optionnel mais indispensable pour les builds) |
+
+### 🔍 Vérification
+```bash
+gcc --version
+gfortran --version
+ld --version
+```
+
+---
+
+# 🪟 **Windows (PowerShell) — Installation via MSYS2 (recommandé)**
+
+MSYS2 est la méthode la plus propre pour avoir un environnement GNU complet sous Windows.
+
+### ✅ **1. Installer MSYS2**
+Télécharge MSYS2 depuis :  
+https://www.msys2.org/
+
+Puis ouvre **MSYS2 MSYS** et mets à jour :
+```bash
+pacman -Syu
+```
+Redémarre MSYS2 si demandé, puis :
+```bash
+pacman -Syu
+```
+
+### ✅ **2. Installer gcc, gfortran et binutils**
+Dans **MSYS2 MinGW64** :
+```bash
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-gcc-fortran mingw-w64-x86_64-binutils
+```
+
+### 🔍 Vérification
+Toujours dans MinGW64 :
+```bash
+gcc --version
+gfortran --version
+ld --version
+```
+
+---
+
+# 🪟 **Windows (PowerShell) — Installation via WSL (alternative simple)**
+
+Si tu préfères compiler dans un vrai Linux sous Windows :
+
+### 1. Activer WSL
+PowerShell admin :
+```powershell
+wsl --install
+```
+
+### 2. Installer Ubuntu
+Puis dans Ubuntu :
+```bash
+sudo apt update
+sudo apt install gcc gfortran binutils make
+```
+
+# 🐧 **Ubuntu — Installation OpenSSL (librairies + headers)**
+
+### ✅ Installer OpenSSL + les headers de développement
+Pour compiler ton code Fortran/C avec TLS, il te faut **libssl-dev** :
+
+```bash
+sudo apt update
+sudo apt install -y openssl libssl-dev
+```
+
+### 📦 Ce que ça installe réellement
+| Paquet | Rôle |
+|--------|------|
+| **openssl** | Outil CLI (`openssl s_client`, `openssl genrsa`, etc.) |
+| **libssl-dev** | Headers C (`openssl/ssl.h`) + librairies `libssl.so` et `libcrypto.so` |
+
+### 🔍 Vérification
+```bash
+openssl version
+```
+
+---
+
+# 🪟 **Windows — Installation OpenSSL (PowerShell)**
+
+Sous Windows, il n’y a pas de paquet officiel Microsoft.  
+La méthode la plus propre pour un environnement de build GNU (gcc/gfortran) est **MSYS2**.
+
+---
+
+## ✔ **Méthode recommandée : MSYS2**
+
+### 1. Installer MSYS2  
+[https://www.msys2.org/](https://www.msys2.org/)
+
+### 2. Ouvrir **MSYS2 MinGW64** et installer OpenSSL
+```bash
+pacman -S mingw-w64-x86_64-openssl
+```
+
+### 📦 Ce que ça installe
+- `libssl-3.dll`
+- `libcrypto-3.dll`
+- Headers : `openssl/*.h`
+- Librairies : `libssl.a`, `libcrypto.a`
+
+### 🔍 Vérification
+```bash
+openssl version
+```
+
+---
+
+## ✔ **Alternative : OpenSSL officiel (Win64)**
+
+Si tu veux OpenSSL **sans MSYS2**, tu peux installer la version Win64 maintenue par Shining Light Productions.
+
+### 1. Télécharger  
+`https://slproweb.com/products/Win32OpenSSL.html` [(slproweb.com in Bing)](https://www.bing.com/search?q="https%3A%2F%2Fslproweb.com%2Fproducts%2FWin32OpenSSL.html")
+
+Choisir :  
+**Win64 OpenSSL v3.x.x (Light)**
+
+### 2. Ajouter au PATH (PowerShell admin)
+```powershell
+setx PATH "$env:PATH;C:\Program Files\OpenSSL-Win64\bin"
+```
+
+### 3. Vérifier
+```powershell
+openssl version
+```
+
+---
+
+# 🧠 Notes importantes pour ton workflow Fortran/C
+
+### ✔ **Linker (Ubuntu)**
+Pour gfortran :
+```bash
+gfortran main.f90 -lssl -lcrypto -o app
+```
+
+### ✔ **Linker (Windows MSYS2 MinGW64)**
+```bash
+gfortran main.f90 -lssl -lcrypto -o app.exe
+```
+
+### ✔ **DLL runtime (Windows)**
+Ton EXE aura besoin de :
+- `libssl-3.dll`
+- `libcrypto-3.dll`
+
+Tu peux les mettre :
+- dans le même dossier que ton EXE  
+ou  
+- dans un dossier du PATH
+
+
 # 🧪 **Build & Run**
 
 ```bash
