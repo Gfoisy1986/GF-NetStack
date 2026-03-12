@@ -4,48 +4,59 @@ program tls_client
     implicit none
 
     integer(c_int) :: sock, nbytes
+    integer :: i
+    integer :: j
     character(kind=c_char), dimension(:), allocatable :: host, request
     character(kind=c_char), dimension(4096) :: buffer
+    character(len=:), allocatable :: json_msg, reply
 
     character(len=*), parameter :: host_str = "127.0.0.1"
-    character(len=*), parameter :: req_str = &
-        "GET / HTTP/1.1" // char(13) // char(10) // &
-        "Host: example.com" // char(13) // char(10) // &
-        char(13) // char(10)
 
-    integer :: i
+    host = [(host_str(i:i), i=1,len_trim(host_str)), c_null_char]
 
-    ! Build proper C-strings
-    host    = [(host_str(i:i), i=1,len_trim(host_str)), c_null_char]
-    request = [(req_str(i:i),  i=1,len_trim(req_str)),  c_null_char]
+    print *, "TLS JSON client starting..."
 
-    print *, "Connecting to server..."
+    call tls_init_client_f()
 
-    call tls_init_f()
-
-    ! CONNECT
     sock = tls_connect_f(host, 4433)
     if (sock < 0) then
         print *, "ERROR: tls_connect_f failed, code=", sock
         stop
     endif
 
-    print *, "Connected."
+    print *, "Connected to TLS server."
 
-    ! SEND
-    call tls_send_f(sock, request, len_trim(req_str))
-    print *, "Request sent."
+    ! ---------------------------
+    ! Send multiple JSON messages
+    ! ---------------------------
+    do i = 1, 3
+        json_msg = '{"cmd":"ping","seq":'//trim(adjustl(itoa(i)))//'}'
 
-    ! RECEIVE
-    nbytes = tls_recv_f(sock, buffer, size(buffer))
-    if (nbytes > 0) then
-        print *, "Received ", nbytes, " bytes:"
-        print *, transfer(buffer(1:nbytes), "")
-    else
-        print *, "No data received."
-    endif
+        request = [(json_msg(j:j), j=1,len_trim(json_msg)), c_null_char]
+
+        call tls_send_f(sock, request, len_trim(json_msg))
+        print *, "Sent JSON:", '"'//trim(json_msg)//'"'
+
+        nbytes = tls_recv_f(sock, buffer, size(buffer))
+
+        if (nbytes > 0) then
+            reply = transfer(buffer(1:nbytes), "")
+            print *, "Received JSON:", '"'//trim(reply)//'"'
+        else
+            print *, "Server closed connection."
+            exit
+        endif
+    end do
 
     call tls_close_f(sock)
-    print *, "Connection closed."
+    print *, "TLS connection closed."
+
+contains
+
+    function itoa(i) result(str)
+        integer, intent(in) :: i
+        character(len=12) :: str
+        write(str,'(I0)') i
+    end function itoa
 
 end program tls_client

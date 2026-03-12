@@ -5,51 +5,60 @@ program tls_server
 
     integer(c_int) :: server, client, nbytes
     character(kind=c_char), dimension(4096) :: buffer
+    character(len=:), allocatable :: msg, json_reply
+    integer :: i
 
-    print *, "Starting TLS server on port 4433..."
+    print *, "Starting TLS JSON server on port 4433..."
 
-    ! Initialize TLS library (OpenSSL init)
-    call tls_init_f()
+    call tls_init_server_f()
 
-    ! Create listening TCP socket
     server = tls_listen_f(4433)
     if (server < 0) then
         print *, "ERROR: tls_listen_f failed, code=", server
         stop
     endif
 
-    print *, "Server listening. Waiting for client..."
+    print *, "Server listening..."
 
-    ! Accept client
-    client = tls_accept_f(server)
-    if (client < 0) then
-        print *, "ERROR: tls_accept_f failed, code=", client
-        call tls_close_f(server)
-        stop
-    endif
+    do
+        print *, "Waiting for client..."
+        client = tls_accept_f(server)
 
-    print *, "Client connected."
+        if (client < 0) then
+            print *, "ERROR: tls_accept_f failed, code=", client
+            cycle
+        endif
 
-    ! Receive data
-    nbytes = tls_recv_f(client, buffer, size(buffer))
-    if (nbytes > 0) then
-        print *, "Received ", nbytes, " bytes:"
-        print *, transfer(buffer(1:nbytes), "")
-    else
-        print *, "No data received or recv error."
-    endif
+        print *, "Client connected."
 
-    ! Send response
-    call tls_send_f(client, &
-        "Hello from TLS server" // c_null_char, &
-        len("Hello from TLS server"))
+        ! ---------------------------
+        ! Handle client session
+        ! ---------------------------
+        do
+            nbytes = tls_recv_f(client, buffer, size(buffer))
 
-    print *, "Response sent. Closing connection."
+            if (nbytes <= 0) then
+                print *, "Client disconnected."
+                exit
+            endif
 
-    ! Close client + server sockets
-    call tls_close_f(client)
+            msg = transfer(buffer(1:nbytes), "")
+            print *, "Received JSON:", '"'//trim(msg)//'"'
+
+            ! ---------------------------
+            ! Build JSON response
+            ! ---------------------------
+            json_reply = '{"status":"ok","echo": "'//trim(msg)//'"}'
+
+            call tls_send_f(client, &
+                trim(json_reply)//c_null_char, &
+                len_trim(json_reply))
+
+            print *, "Sent JSON reply:", '"'//trim(json_reply)//'"'
+        end do
+
+        call tls_close_f(client)
+    end do
+
     call tls_close_f(server)
-
-    print *, "TLS server closed."
-
 end program tls_server

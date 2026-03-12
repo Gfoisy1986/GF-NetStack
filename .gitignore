@@ -1,0 +1,13 @@
+# TLS private keys
+*.key
+*.pem
+*.crt
+*.csr
+
+# Specific server files
+server.key
+server.pem
+
+# OpenSSL junk
+*.p12
+*.pfx
