@@ -7,6 +7,40 @@ It provides a stable foundation for building secure agents, tunnels, and remote�
 This project demonstrates how Fortran can interoperate with C and OpenSSL to create portable, high‑performance network clients and servers.
 
 ---
+🔐 1. Generate TLS cert + key on Ubuntu (Linux)
+Open a terminal and run:
+
+```bash
+
+openssl req -x509 -newkey rsa:2048 \
+  -keyout server.key \
+  -out server.pem \
+  -days 365 \
+  -nodes \
+  -subj "/CN=localhost"
+  
+```
+This creates:
+• 	 → private key
+• 	 → certificate
+Both go in the same directory where you run your TLS server.
+
+🔐 2. Generate TLS cert + key in PowerShell (Windows)
+PowerShell uses the same OpenSSL command, as long as OpenSSL is installed (Git for Windows includes it).
+Run this in PowerShell:
+```bash
+
+openssl req -x509 -newkey rsa:2048 `
+  -keyout server.key `
+  -out server.pem `
+  -days 365 `
+  -nodes `
+  -subj "/CN=localhost"
+  
+```
+  
+
+
 
 ## 🚀 **Current Status (Working & Tested)**
 
