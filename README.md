@@ -35,7 +35,7 @@ Chaque section aura son propre README détaillé plus tard.
 ## 🧩 **État actuel**
 - Serveur WebSocket (WSS) fonctionnel  
 - Client réseau propre en développement  
-- Backend TCP/TLS stable  
+- Backend TCP/TLS stable  (nouvelle version en cour)
 - Nettoyage et réorganisation du dépôt en cours  
 - API haut niveau en réflexion (`OpenNetworkConnection()`, etc.)
 
