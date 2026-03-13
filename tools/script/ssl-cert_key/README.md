@@ -1,4 +1,4 @@
-# Créer un Certificat & clef  /  Create self signed certificate & key
+# Créer un Certificat & clef auto signée  /  Create self signed certificate & key
 
 ### Create Self signed Certificate & Key on ubuntu:
 
@@ -6,7 +6,7 @@
 
 chmod +x ubuntu_ssl-certificate_key.sh
 
-./generate-cert.sh
+./ubuntu_ssl-certificate_key.sh
 
 ```
 
@@ -15,6 +15,6 @@ chmod +x ubuntu_ssl-certificate_key.sh
 
 ```bash
 
-.\generate-cert.bat
+.\powershell_ssl-certificate_key.bat
 
 ```
