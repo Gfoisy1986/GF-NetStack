@@ -1,4 +1,7 @@
-# GF‑Fortran‑SDK 🚀  
+# GF‑Fortran‑SDK 
+
+## En cours de développement...  Currently in development...
+
 ### Fortran95 SDK — Bilingual README (FR/EN)
 
 ---
@@ -6,7 +9,7 @@
 <details>
   <summary>🇫🇷 Version Française</summary>
 
-# GF‑Fortran‑SDK 🚀  
+# GF‑Fortran‑SDK  
 ### SDK moderne, modulaire et extensible pour Fortran95
 
 GF‑Fortran‑SDK a pour ambition de devenir un **écosystème complet** pour développer des applications modernes en Fortran95.  
@@ -91,7 +94,7 @@ Fenêtres, boutons, labels, sliders, layout automatique, intégration réseau.
 <details>
   <summary>🇬🇧 English Version</summary>
 
-# GF‑Fortran‑SDK 🚀  
+# GF‑Fortran‑SDK  
 ### A modern, modular, and extensible SDK for Fortran95
 
 GF‑Fortran‑SDK aims to become a **complete ecosystem** for building modern applications in Fortran95.  
