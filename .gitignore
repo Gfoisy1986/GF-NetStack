@@ -11,3 +11,13 @@ server.pem
 # OpenSSL junk
 *.p12
 *.pfx
+
+# Fortran module files
+*.mod
+*.smod
+
+# Build artifacts
+*.o
+*.a
+*.so
+build/
