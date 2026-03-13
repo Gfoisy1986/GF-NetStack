@@ -1,107 +1,37 @@
-# 🎨 **README — UI Module (GF‑Fortran‑SDK)**
+# f90GL — Sources Officielles (Intégration GF‑Fortran‑SDK)
 
-```markdown
-# UI Module — GF‑Fortran‑SDK
+Ce dossier contient les **sources originales** de f90GL, un ensemble de modules Fortran 90/95 fournissant des interfaces vers OpenGL, GLU et GLUT.  
+Ces fichiers proviennent directement de la distribution officielle du NIST et sont intégrés ici afin d’assurer une version stable, contrôlée et portable pour le SDK.
 
-Le dossier `ui/` contient l’infrastructure nécessaire pour la future API graphique du SDK.  
-Cette API permettra de créer des interfaces graphiques modernes en Fortran95 en s’appuyant sur **f90GL** (OpenGL + GLUT pour Fortran).
+## 📦 Contenu du dossier
 
-L’objectif est d’offrir une couche simple, portable et intuitive pour concevoir des applications graphiques, des outils internes, des dashboards et des interfaces interactives — sans exposer la complexité d’OpenGL.
+- `unix/`  
+  Sources et fichiers spécifiques aux environnements Unix/Linux.
 
----
+- `windows/`  
+  Sources et fichiers spécifiques à la compilation sous Windows.
 
-## 🎯 Objectifs du module UI
+- `license-nist.txt`  
+  Licence officielle du NIST pour f90GL (domaine public aux États‑Unis).  
+  Ce fichier doit être conservé tel quel conformément aux exigences de redistribution.
 
-- Fournir une API haut niveau pour créer des interfaces graphiques en Fortran95.
-- Simplifier l’utilisation de f90GL en masquant :
-  - la gestion des fenêtres
-  - les callbacks GLUT
-  - le rendu OpenGL
-  - la gestion des événements
-- Offrir des widgets simples :
-  - boutons
-  - labels
-  - sliders
-  - champs texte
-- Intégration directe avec les modules réseau du SDK.
-- Assurer une compatibilité multi‑plateforme (Windows, Linux, macOS).
+- `nist-install-instruction.pdf`  
+  Documentation originale fournie par le NIST expliquant la structure du projet et les instructions d’installation.
 
----
+## 🎯 Rôle dans GF‑Fortran‑SDK
 
-## 🧱 Structure du dossier
+f90GL est utilisé comme **base graphique** pour la future API UI du SDK.  
+Il permet :
 
-```
-ui/
-  f90gl/          ← sources officiels + licence NIST
-  build/          ← bibliothèques précompilées par plateforme
-  include/        ← modules Fortran générés
-  src/            ← API UI haut niveau (en développement)
-  examples/       ← exemples d’utilisation
-  source/         ← nist source ofiiciel
-```
+- la création de fenêtres OpenGL  
+- la gestion des événements clavier/souris  
+- le rendu 2D/3D  
+- l’intégration d’une interface utilisateur personnalisée
 
-### 📌 `f90gl/`
-Contient les sources originales de f90GL ainsi que la licence NIST.  
-Ces fichiers ne doivent pas être modifiés sans documentation claire.
-
-### 📌 `build/`
-Contiendra les versions précompilées de f90GL pour chaque plateforme :
-
-```
-build/
-  windows/
-  linux/
-  macos/
-```
-
-Les utilisateurs du SDK n’auront pas à compiler f90GL eux‑mêmes.
-
-### 📌 `src/`
-Contiendra l’API UI haut niveau, par exemple :
-
-```fortran
-call UI_Begin("Demo", 800, 600)
-call UI_Label("Bonjour")
-if (UI_Button("OK")) then
-    call DoSomething()
-end if
-call UI_End()
-```
-
-### 📌`examples
-Exemples complets montrant comment utiliser l’API UI avec ou sans réseau à venir.
-
----
+Le SDK fournira une couche d’abstraction moderne par‑dessus f90GL afin de simplifier son utilisation dans des projets Fortran95.
 
 ## 🔧 Compilation
 
-Le module UI sera fourni avec :
+GF‑Fortran‑SDK ne requiert pas que l’utilisateur final compile f90GL.  
+Des versions précompilées seront fournies dans :
 
-- des bibliothèques précompilées pour chaque OS
-- des scripts de build simples
-- une intégration automatique dans le SDK
-
-Les utilisateurs n’auront pas à compiler f90GL.
-
----
-
-## 📜 Licence
-
-Le module UI inclut f90GL, distribué sous la licence NIST.  
-Le fichier `license-nist.txt` doit être conservé tel quel.
-
----
-
-## 🔮 État actuel
-
-- Intégration des sources f90GL : ✔
-- Préparation du dossier `build/` : en cours
-- Conception de l’API UI haut niveau : en développement
-- Exemples graphiques : à venir
-
-Ce module deviendra une brique essentielle du GF‑Fortran‑SDK.
-
-
----
-
-Guillaume Foisy
