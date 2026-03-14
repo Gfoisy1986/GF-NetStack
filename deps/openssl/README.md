@@ -56,7 +56,7 @@ OpenSSL is licensed under the **Apache License 2.0**, with the
 The full license text is included in:
 
 ```
-deps/openssl/LICENSE
+deps/openssl/LICENSE.txt
 ```
 
 You must comply with the OpenSSL license if you redistribute the SDK or build  
