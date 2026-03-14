@@ -1,0 +1,176 @@
+# 📘 **Fortran 95 Quick Reference**
+*A compact, SDK‑friendly cheat sheet for daily use.*
+
+---
+
+## 🔤 **1. Basic Types**
+| Category | Types |
+|---------|-------|
+| Integers | `integer` |
+| Reals | `real`, `double precision` |
+| Complex | `complex` |
+| Logical | `logical` |
+| Character | `character(len=...)` |
+
+**Kind parameters:** `integer(kind=4)`, `real(kind=8)`
+**Best practice:** always start files with `implicit none`.
+
+---
+
+## ➗ **2. Operators**
+### Arithmetic
+`+  -  *  /  **`
+
+### Relational
+`==  /=  <  <=  >  >=`
+
+### Logical
+`.and.  .or.  .not.  .eqv.  .neqv.`
+
+---
+
+## 🧮 **3. Expressions & Assignment**
+- Standard assignment: `x = y + 2`
+- Pointer assignment: `p => target`
+- Array assignment: `A = B + 3`
+- Type conversion: `real(i)`, `int(x)`
+
+---
+
+## 🔁 **4. Control Flow**
+### Conditionals
+```
+if (cond) then
+elseif (cond) then
+else
+end if
+```
+
+### Case selection
+```
+select case (x)
+case (1)
+case default
+end select
+```
+
+### Loops
+```
+do i = 1, n
+end do
+```
+`exit`, `cycle`, `do while (cond)`
+
+---
+
+## 📦 **5. Program Units**
+- `program`
+- `module`
+- `subroutine`
+- `function`
+- `block data`
+
+### Modules
+```
+module m
+contains
+  subroutine s()
+  end subroutine
+end module
+```
+
+### Interfaces
+Generated automatically when using modules.
+
+---
+
+## 🧩 **6. Procedures**
+### Subroutines
+```
+call foo(a, b)
+```
+
+### Functions
+```
+x = bar(i)
+```
+
+### Argument intent
+`intent(in)`, `intent(out)`, `intent(inout)`
+
+### Recursion
+`recursive function f(...)`
+
+---
+
+## 🧮 **7. Arrays**
+- Constructor: `(/ 1,2,3 /)`
+- Slicing: `A(1:10:2)`
+- Whole‑array ops: `C = A + B`
+- Inquiry: `size(A)`, `shape(A)`, `lbound(A)`, `ubound(A)`
+
+---
+
+## 📌 **8. Pointers**
+- Declare: `real, pointer :: p(:)`
+- Associate: `p => target`
+- Nullify: `nullify(p)`
+- Test: `associated(p)`
+- Dynamic allocation: `allocate(A(n))`, `deallocate(A)`
+
+---
+
+## ⚙️ **9. Intrinsic Procedures**
+*(Accurate to your open tab)   [fortran-lang.org](https://fortran-lang.org/learn/f95_features/intrinsic_procedures)*
+
+### Categories
+- **Elemental:** operate on scalars/arrays (`abs`, `sin`, `exp`)
+- **Inquiry:** independent of value (`precision`, `kind`, `bit_size`)
+- **Transformational:** reshape/convert (`reshape`, `transfer`)
+- **Subroutines:** perform actions (`random_number`, `system_clock`, `date_and_time`)
+
+### Bit intrinsics
+`btest`, `iand`, `ibclr`, `ibits`, `ibset`, `ieor`, `ior`, `ishft`, `ishftc`, `not`
+
+### Time & system
+`date_and_time`, `system_clock`, `cpu_time`
+
+### Random
+`random_number`, `random_seed`
+
+### Data reinterpretation
+`transfer(source, mold)`
+
+---
+
+## 📤 **10. I/O (Data Transfer)**
+### Basic
+`read(unit, fmt) var`
+`write(unit, fmt) var`
+
+### List‑directed
+`read(*,*)`, `write(*,*)`
+
+### Internal files
+Use strings as I/O buffers.
+
+### Formats
+`I`, `F`, `E`, `A`, `L`, `/`, `:`
+
+---
+
+## 📁 **11. External Files**
+- Open: `open(unit, file='x.dat', status='old')`
+- Close: `close(unit)`
+- Rewind: `rewind(unit)`
+- Backspace: `backspace(unit)`
+- Endfile: `endfile(unit)`
+- Access modes: `sequential`, `direct`
+
+---
+
+## 📚 **12. Standard References**
+- ISO/IEC 1539‑1:1997 (Fortran 95)
+- TR‑15581 (allocatable enhancements)
+
+---

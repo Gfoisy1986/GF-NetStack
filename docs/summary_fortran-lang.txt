@@ -1,0 +1,163 @@
+# 📘 **Fortran 95 — One‑Page Onboarding Summaries**
+
+---
+
+# 1. **Language Elements**
+### Purpose
+Introduce the fundamental building blocks of Fortran 95: types, declarations, operators, and program structure.
+
+### Key Concepts
+- **Basic types:** `integer`, `real`, `double precision`, `complex`, `logical`, `character`.
+- **Kind parameters:** Allow precision control (`real(kind=8)` etc.).
+- **Declarations:** Explicit typing recommended; `implicit none` is standard practice.
+- **Operators:** Arithmetic (`+ - * / **`), relational (`== /= < <= > >=`), logical (`.and. .or. .not.`).
+- **Statements:** Free‑form source, continuation with `&`, comments with `!`.
+
+### Why It Matters
+These rules define the “grammar” of the language. Every module, procedure, and array operation builds on these foundations.
+
+---
+
+# 2. **Expressions and Assignments**
+### Purpose
+Explain how values are computed and stored.
+
+### Key Concepts
+- **Expression evaluation:** Follows mathematical precedence; parentheses override.
+- **Type conversion:** Automatic in many cases; explicit with `real()`, `int()`, etc.
+- **Assignment:** `=` for variables, `=>` for pointers.
+- **Array assignments:** Whole‑array operations are intrinsic to Fortran (`A = B + 2`).
+
+### Why It Matters
+Fortran’s array semantics and predictable evaluation rules are central to numerical correctness and performance.
+
+---
+
+# 3. **Control Statements**
+### Purpose
+Define program flow and decision‑making.
+
+### Key Concepts
+- **Conditional:** `if`, `elseif`, `else`, `end if`.
+- **Multi‑branch:** `select case`.
+- **Loops:** `do`, `do while`, `exit`, `cycle`.
+- **Implied‑do:** Useful in I/O and array constructors.
+
+### Why It Matters
+Fortran’s control flow is simple but expressive, enabling clear scientific code without side‑effect‑heavy constructs.
+
+---
+
+# 4. **Program Units and Procedures**
+### Purpose
+Describe modular structure and reusable code.
+
+### Key Concepts
+- **Program units:** `program`, `module`, `subroutine`, `function`, `block data`.
+- **Modules:** Encapsulate data + procedures; support `use` association.
+- **Interfaces:** Explicit interfaces required for many features; modules generate them automatically.
+- **Recursion:** Allowed with `recursive` keyword.
+- **Intent:** `intent(in|out|inout)` clarifies argument behavior.
+
+### Why It Matters
+Modules and explicit interfaces are the backbone of modern Fortran software architecture — essential for your SDK’s clean API design.
+
+---
+
+# 5. **Array Handling**
+### Purpose
+Explain Fortran’s most powerful feature: native array operations.
+
+### Key Concepts
+- **Array constructors:** `(/ ... /)`
+- **Slicing:** `A(1:10:2)`
+- **Whole‑array operations:** `C = A + B`
+- **Elemental behavior:** Intrinsics apply element‑wise automatically.
+- **Shape and size:** `shape()`, `size()`, `lbound()`, `ubound()`.
+
+### Why It Matters
+Fortran’s array semantics eliminate boilerplate loops and enable vectorized, high‑performance numerical code.
+
+---
+
+# 6. **Pointers**
+### Purpose
+Provide dynamic, flexible data structures.
+
+### Key Concepts
+- **Pointer assignment:** `p => target`
+- **Association tests:** `associated(p)`
+- **Nullification:** `nullify(p)`
+- **Pointer arrays:** Fully supported
+- **Dynamic allocation:** Often paired with `allocate`/`deallocate`.
+
+### Why It Matters
+Pointers enable linked structures, dynamic arrays, and flexible APIs — crucial for modern scientific libraries.
+
+---
+
+# 7. **Intrinsic Procedures**
+### Purpose
+Document the built‑in functions and subroutines provided by Fortran 95.
+
+### Categories (from your open tab)
+- **Elemental functions** — operate element‑wise on arrays.
+- **Inquiry functions** — return properties of variables (`kind`, `shape`, `size`).
+- **Transformational functions** — reshape or convert data (`transfer`, `reshape`).
+- **Subroutines** — perform actions (`random_number`, `date_and_time`, `system_clock`) .
+
+### Examples (from the page)
+- **Bit operations:** `iand`, `ibset`, `ishft`, `not`
+- **Random numbers:** `random_number`, `random_seed`
+- **Time:** `date_and_time`, `cpu_time`, `system_clock`
+- **Data reinterpretation:** `transfer`
+
+### Why It Matters
+Intrinsics are the “standard library” of Fortran 95 — portable, efficient, and guaranteed across compilers.
+
+---
+
+# 8. **Data Transfer (I/O)**
+### Purpose
+Explain formatted and unformatted input/output.
+
+### Key Concepts
+- **READ/WRITE:** Core I/O statements.
+- **Format descriptors:** `I`, `F`, `E`, `A`, `L`, `/`, `:`
+- **Internal files:** Strings used as I/O targets.
+- **List‑directed I/O:** `read(*,*)`, `write(*,*)`.
+
+### Why It Matters
+Fortran’s I/O model is stable, predictable, and widely used in scientific workflows.
+
+---
+
+# 9. **Operations on External Files**
+### Purpose
+Describe file handling beyond simple reads/writes.
+
+### Key Concepts
+- **OPEN/CLOSE:** Control file access.
+- **Access modes:** Sequential vs direct.
+- **Positioning:** `rewind`, `backspace`, `endfile`.
+- **Status:** `status='old'|'new'|'replace'`.
+
+### Why It Matters
+Scientific codes often manage large datasets; predictable file semantics are essential.
+
+---
+
+# 10. **Bibliography**
+### Purpose
+Provide references to the formal standards and related documents.
+
+### Contents
+- ISO/IEC 1539‑1:1997 (Fortran 95 standard)
+- Technical Reports (e.g., TR‑15581 for allocatable enhancements)
+- Historical notes and evolution of the language
+
+### Why It Matters
+This section anchors the documentation in the official standard, even though the ISO text itself is not open‑source.
+
+---
+
