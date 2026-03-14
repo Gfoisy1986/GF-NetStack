@@ -89,18 +89,6 @@ deps/
 
 ---
 
-## 🛠️ Build Scripts
-
-The SDK includes helper scripts to rebuild OpenSSL from source:
-
-- `build_openssl_windows.ps1`
-- `build_openssl_linux.sh`
-
-These scripts download, configure, compile, and install OpenSSL into the  
-appropriate `deps/openssl/<platform>/` directory.
-
----
-
 ## 🤝 Credits
 
 OpenSSL is an open‑source project maintained by the OpenSSL Software Foundation.  
