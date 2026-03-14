@@ -1,276 +1,246 @@
 module websocket
-  !!
-  !! Minimal WebSocket server-side support on top of TLS.
-  !! - Handshake (HTTP Upgrade)
-  !! - Text frame send
-  !! - Text frame receive (masked client frames, len < 126)
-  !!
-  use iso_c_binding
-  implicit none
-  private
+    use iso_c_binding
+    use tls_module
+    use crypto_wrapper
+    implicit none
+    private
 
-  public :: ws_handle_upgrade
-  public :: ws_send_text
-  public :: ws_recv_text
-  public :: ws_is_close
+    integer, parameter :: BUF_LEN = 8192
 
-  interface
-     ! You will bind these to your existing crypto/base64 C wrappers (LibreSSL/OpenSSL).
-     function sha1_hash_bin(input, in_len, out_buf, out_len) bind(C, name="ws_sha1_hash_bin")
-       import :: c_char, c_int
-       character(kind=c_char), dimension(*), intent(in)  :: input
-       integer(c_int),                      value        :: in_len
-       character(kind=c_char), dimension(*), intent(out) :: out_buf
-       integer(c_int),                      intent(out)  :: out_len
-       integer(c_int)                                     :: sha1_hash_bin
-     end function
-
-     function base64_encode_bin(input, in_len, out_buf, out_len) bind(C, name="ws_base64_encode_bin")
-       import :: c_char, c_int
-       character(kind=c_char), dimension(*), intent(in)  :: input
-       integer(c_int),                      value        :: in_len
-       character(kind=c_char), dimension(*), intent(out) :: out_buf
-       integer(c_int),                      intent(out)  :: out_len
-       integer(c_int)                                     :: base64_encode_bin
-     end function
-  end interface
+    public :: ws_handle_upgrade
+    public :: ws_recv_text
+    public :: ws_send_text
 
 contains
 
-  !==========================
-  ! High-level entry point
-  !==========================
-  logical function ws_handle_upgrade(client, request_raw) result(ok)
-    !!
-    !! Parse HTTP Upgrade request and send WebSocket handshake response.
-    !!
-    integer,               intent(in) :: client
-    character(len=*),      intent(in) :: request_raw
+    !------------------------------------------------------------
+    ! sha1_base64
+    !   - Pure Fortran helper using crypto_wrapper
+    !   - key: plain text key
+    !   - accept_key: base64(SHA1(key))
+    !------------------------------------------------------------
+    subroutine sha1_base64(key, accept_key)
+        character(len=*), intent(in)  :: key
+        character(len=*), intent(out) :: accept_key
 
-    character(len=:), allocatable :: key, accept, response
+        character(len=20) :: digest
+        character(len=:), allocatable :: b64
+        integer :: n
 
-    ok = .false.
+        digest = sha1_hash_f(trim(key))
+        b64    = base64_encode_f(digest)
 
-    if (.not. is_websocket_upgrade(request_raw)) return
+        accept_key = ' '
+        n = min(len(accept_key), len(b64))
+        if (n > 0) accept_key(1:n) = b64(1:n)
+    end subroutine sha1_base64
 
-    key = extract_sec_websocket_key(request_raw)
-    if (len_trim(key) == 0) return
+    !------------------------------------------------------------
+    ! ws_handle_upgrade
+    !   - Parses HTTP Upgrade request
+    !   - Extracts Sec-WebSocket-Key
+    !   - Sends HTTP 101 Switching Protocols
+    !------------------------------------------------------------
+    logical function ws_handle_upgrade(sock, request) result(ok)
+        integer, intent(in) :: sock
+        character(len=*), intent(in) :: request
 
-    accept = compute_accept_key(trim(key))
+        character(len=:), allocatable :: key_line, ws_key, response
+        character(len=256) :: accept_key_c
+        integer :: p1, p2, n
 
-    response = &
-      "HTTP/1.1 101 Switching Protocols" // crlf() // &
-      "Upgrade: websocket"               // crlf() // &
-      "Connection: Upgrade"              // crlf() // &
-      "Sec-WebSocket-Accept: " // trim(accept) // crlf() // crlf()
+        ok = .false.
 
-    call tls_send_f(client, response)
+        ! Find "Sec-WebSocket-Key:" line
+        p1 = index(request, "Sec-WebSocket-Key:")
+        if (p1 == 0) return
 
-    ok = .true.
-  end function ws_handle_upgrade
+        p2 = index(request(p1:), new_line('a'))
+        if (p2 == 0) then
+            key_line = adjustl(request(p1+len("Sec-WebSocket-Key:"):))
+        else
+            key_line = adjustl(request(p1+len("Sec-WebSocket-Key:"):p1+p2-2))
+        end if
 
-  !==========================
-  ! Send text frame (server → client)
-  !==========================
-  subroutine ws_send_text(client, msg)
-    integer,          intent(in) :: client
-    character(len=*), intent(in) :: msg
+        ws_key = trim(key_line)
 
-    integer :: plen
-    character(len=:), allocatable :: frame
+        call sha1_base64(ws_key, accept_key_c)
 
-    plen = len_trim(msg)
-    if (plen > 125) then
-       ! For now, keep it simple: only small frames.
-       ! You can extend to 126/127 lengths later.
-       return
-    end if
+        response = "HTTP/1.1 101 Switching Protocols"//char(13)//char(10)// &
+                   "Upgrade: websocket"//char(13)//char(10)// &
+                   "Connection: Upgrade"//char(13)//char(10)// &
+                   "Sec-WebSocket-Accept: "//trim(accept_key_c)//char(13)//char(10)// &
+                   char(13)//char(10)
 
-    allocate(character(len=2+plen) :: frame)
+        call ws_send_raw(sock, response, len_trim(response), n)
+        if (n /= len_trim(response)) return
 
-    ! FIN=1, opcode=1 (text)
-    frame(1:1) = achar(int(Z'81'))
-    ! No mask bit for server->client, payload length only
-    frame(2:2) = achar(plen)
-    if (plen > 0) frame(3:2+plen) = msg(1:plen)
+        ok = .true.
+    end function ws_handle_upgrade
 
-    call tls_send_f(client, frame)
-  end subroutine ws_send_text
+    !------------------------------------------------------------
+    ! ws_recv_text
+    !   - Receives a single text frame
+    !   - Handles masking
+    !   - Returns message as allocatable character
+    !------------------------------------------------------------
+    logical function ws_recv_text(sock, msg) result(ok)
+        integer, intent(in) :: sock
+        character(len=:), allocatable, intent(out) :: msg
 
-  !==========================
-  ! Receive text frame (client → server, masked, len < 126)
-  !==========================
-  logical function ws_recv_text(client, msg) result(ok)
-    integer,               intent(in)  :: client
-    character(len=:), allocatable, intent(out) :: msg
+        integer :: n, payload_len, i
+        integer :: b1, b2, opcode
+        logical :: fin, masked
+        integer(kind=1), dimension(4) :: mask
+        integer(kind=1), dimension(:), allocatable :: payload
+        character(len=BUF_LEN) :: buf
 
-    character(len=2048) :: buf
-    integer :: n, plen, i
-    integer :: b1, b2, masked
-    integer :: pstart
-    character(len=4) :: mask
-    character(len=:), allocatable :: payload
+        ok = .false.
+        msg = ""
 
-    ok = .false.
-    msg = ""
+        ! Read first 2 bytes
+        call ws_recv_raw(sock, buf, 2, n)
+        if (n /= 2) return
 
-    call tls_recv_f(client, buf, n)
-    if (n < 6) return  ! minimal frame size
+        b1 = iachar(buf(1:1))
+        b2 = iachar(buf(2:2))
 
-    b1 = iachar(buf(1:1))
-    b2 = iachar(buf(2:2))
+        fin    = iand(b1, int(Z'80')) /= 0
+        opcode = iand(b1, int(Z'0F'))
+        masked = iand(b2, int(Z'80')) /= 0
+        payload_len = iand(b2, int(Z'7F'))
 
-    ! Close frame?
-    if (iand(b1, Z'0F') == Z'08') then
-       ok = .false.
-       return
-    end if
+        if (opcode == int(Z'08')) then
+            ! Close frame
+            ok = .false.
+            return
+        end if
 
-    masked = iand(b2, Z'80')
-    plen   = iand(b2, Z'7F')
+        ! Extended payload lengths
+        if (payload_len == 126) then
+            call ws_recv_raw(sock, buf, 2, n)
+            if (n /= 2) return
+            payload_len = iachar(buf(1:1))*256 + iachar(buf(2:2))
+        else if (payload_len == 127) then
+            call ws_recv_raw(sock, buf, 8, n)
+            if (n /= 8) return
+            payload_len = iachar(buf(5:5))*256**3 + iachar(buf(6:6))*256**2 + &
+                          iachar(buf(7:7))*256    + iachar(buf(8:8))
+        end if
 
-    if (masked == 0) then
-       ! Client frames MUST be masked
-       return
-    end if
+        ! Read mask if present
+        if (masked) then
+            call ws_recv_raw(sock, buf, 4, n)
+            if (n /= 4) return
+            do i = 1, 4
+                mask(i) = int(iachar(buf(i:i)), kind=1)
+            end do
+        end if
 
-    if (plen > 125) then
-       ! Keep it simple for now
-       return
-    end if
+        if (payload_len < 0 .or. payload_len > BUF_LEN) return
 
-    ! Mask key starts at byte 3
-    mask = buf(3:6)
-    pstart = 7
+        allocate(payload(payload_len))
 
-    if (n < pstart + plen - 1) return
+        call ws_recv_raw(sock, buf, payload_len, n)
+        if (n /= payload_len) then
+            deallocate(payload)
+            return
+        end if
 
-    allocate(character(len=plen) :: payload)
+        do i = 1, payload_len
+            payload(i) = int(iachar(buf(i:i)), kind=1)
+        end do
 
-    do i = 1, plen
-       payload(i:i) = achar(ieor(iachar(buf(pstart + i - 1:pstart + i - 1)), iachar(mask(mod(i-1,4)+1:mod(i-1,4)+1))))
-    end do
+        if (masked) then
+            do i = 1, payload_len
+                payload(i) = ieor(payload(i), mask(mod(i-1,4)+1))
+            end do
+        end if
 
-    allocate(character(len=plen) :: msg)
-    msg = payload
+        msg = ""
+        if (payload_len > 0) then
+            msg = repeat(" ", payload_len)
+            do i = 1, payload_len
+                msg(i:i) = achar(mod(int(payload(i)), 256))
+            end do
+        end if
 
-    ok = .true.
-  end function ws_recv_text
+        deallocate(payload)
+        ok = .true.
+    end function ws_recv_text
 
-  !==========================
-  ! Check if frame is close (optional helper)
-  !==========================
-  logical function ws_is_close(frame) result(is_close)
-    character(len=*), intent(in) :: frame
-    integer :: b1
-    is_close = .false.
-    if (len(frame) < 2) return
-    b1 = iachar(frame(1:1))
-    if (iand(b1, Z'0F') == Z'08') is_close = .true.
-  end function ws_is_close
+    !------------------------------------------------------------
+    ! ws_send_text
+    !   - Sends a single unmasked text frame
+    !------------------------------------------------------------
+    subroutine ws_send_text(sock, msg)
+        integer, intent(in) :: sock
+        character(len=*), intent(in) :: msg
 
-  !==========================
-  ! Internal helpers
-  !==========================
-  logical function is_websocket_upgrade(req) result(is_ws)
-    character(len=*), intent(in) :: req
-    character(len=:), allocatable :: lower
-    integer :: i
+        integer :: payload_len, n, i, hdr_len
+        character(len=BUF_LEN) :: frame
+        integer :: b
 
-    lower = to_lower(req)
-    is_ws = index(lower, "upgrade: websocket") > 0 .and. &
-            index(lower, "connection: upgrade") > 0 .and. &
-            index(lower, "sec-websocket-key:") > 0
-  end function is_websocket_upgrade
+        payload_len = len_trim(msg)
 
-  function extract_sec_websocket_key(req) result(key)
-    character(len=*), intent(in) :: req
-    character(len=:), allocatable :: key
-    character(len=:), allocatable :: lower, line
-    integer :: p, eol, start
+        ! FIN + text opcode = 0x81
+        b = int(Z'81')
+        frame(1:1) = achar(mod(b, 256))
 
-    lower = to_lower(req)
-    p = index(lower, "sec-websocket-key:")
-    if (p == 0) then
-       allocate(character(len=0) :: key)
-       return
-    end if
+        if (payload_len <= 125) then
+            frame(2:2) = achar(payload_len)
+            hdr_len = 2
+        else if (payload_len <= 65535) then
+            frame(2:2) = achar(126)
+            frame(3:3) = achar(iand(ishft(payload_len, -8), int(Z'FF')))
+            frame(4:4) = achar(iand(payload_len,              int(Z'FF')))
+            hdr_len = 4
+        else
+            frame(2:2) = achar(127)
+            frame(3:3) = achar(0)
+            frame(4:4) = achar(0)
+            frame(5:5) = achar(0)
+            frame(6:6) = achar(0)
+            frame(7:7)  = achar(iand(ishft(payload_len, -24), int(Z'FF')))
+            frame(8:8)  = achar(iand(ishft(payload_len, -16), int(Z'FF')))
+            frame(9:9)  = achar(iand(ishft(payload_len, -8),  int(Z'FF')))
+            frame(10:10)= achar(iand(payload_len,              int(Z'FF')))
+            hdr_len = 10
+        end if
 
-    eol = index(req(p:), crlf())
-    if (eol == 0) eol = len(req) - p + 1
+        do i = 1, payload_len
+            frame(hdr_len+i:hdr_len+i) = msg(i:i)
+        end do
 
-    line = req(p:p+eol-1)
-    start = index(line, ":")
-    if (start == 0) then
-       allocate(character(len=0) :: key)
-       return
-    end if
+        call ws_send_raw(sock, frame, hdr_len + payload_len, n)
+    end subroutine ws_send_text
 
-    line = adjustl(line(start+1:))
-    ! strip trailing CR/LF/spaces
-    line = trim(line)
+    !------------------------------------------------------------
+    ! Low-level raw send/recv hooks
+    !   - Mapped to tls_send / tls_recv from tls_module
+    !------------------------------------------------------------
+    subroutine ws_send_raw(sock, buf, nbytes, sent)
+        integer, intent(in) :: sock
+        character(len=*), intent(in) :: buf
+        integer, intent(in) :: nbytes
+        integer, intent(out) :: sent
 
-    allocate(character(len=len_trim(line)) :: key)
-    key = trim(line)
-  end function extract_sec_websocket_key
+        integer(c_int) :: res
 
-  function compute_accept_key(key) result(out)
-    character(len=*), intent(in) :: key
-    character(len=:), allocatable :: out
+        res = tls_send(sock, buf, nbytes)
+        sent = res
+    end subroutine ws_send_raw
 
-    character(len=*), parameter :: guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+    subroutine ws_recv_raw(sock, buf, nbytes, recvd)
+        integer, intent(in) :: sock
+        character(len=*), intent(out) :: buf
+        integer, intent(in) :: nbytes
+        integer, intent(out) :: recvd
 
-    character(kind=c_char), dimension(0:255) :: inbuf
-    character(kind=c_char), dimension(0:255) :: sha1buf
-    character(kind=c_char), dimension(0:255) :: b64buf
-    integer(c_int) :: in_len, sha1_len, b64_len, rc
-    integer :: i
+        integer(c_int) :: res
 
-    in_len = len_trim(key) + len(guid)
-    if (in_len > 256) in_len = 256
-
-    do i = 1, len_trim(key)
-       inbuf(i-1) = key(i:i)
-    end do
-    do i = 1, len(guid)
-       inbuf(len_trim(key)+i-1) = guid(i:i)
-    end do
-
-    rc = sha1_hash_bin(inbuf, in_len, sha1buf, sha1_len)
-    if (rc /= 0) then
-       allocate(character(len=0) :: out)
-       return
-    end if
-
-    rc = base64_encode_bin(sha1buf, sha1_len, b64buf, b64_len)
-    if (rc /= 0) then
-       allocate(character(len=0) :: out)
-       return
-    end if
-
-    allocate(character(len=b64_len) :: out)
-    do i = 1, b64_len
-       out(i:i) = b64buf(i-1)
-    end do
-  end function compute_accept_key
-
-  pure function crlf() result(s)
-    character(len=2) :: s
-    s = char(13)//char(10)
-  end function crlf
-
-  pure function to_lower(s) result(t)
-    character(len=*), intent(in) :: s
-    character(len=len(s)) :: t
-    integer :: i, c
-    do i = 1, len(s)
-       c = iachar(s(i:i))
-       if (c >= iachar('A') .and. c <= iachar('Z')) then
-          t(i:i) = achar(c + 32)
-       else
-          t(i:i) = s(i:i)
-       end if
-    end do
-  end function to_lower
+        res = tls_recv(sock, buf, nbytes)
+        recvd = res
+    end subroutine ws_recv_raw
 
 end module websocket

@@ -7,10 +7,13 @@ module wss_server_mod
     use ws_tls_shim
     implicit none
 
-    integer, parameter :: OP_CONTINUATION = 0
-    integer, parameter :: OP_BINARY       = 2
-    integer, parameter :: OP_PING         = 9
-    integer, parameter :: OP_PONG         = 10
+
+    integer, parameter :: OP_CONT   = int(Z'00')
+    integer, parameter :: OP_TEXT   = int(Z'01')
+    integer, parameter :: OP_BINARY = int(Z'02')
+    integer, parameter :: OP_CLOSE  = int(Z'08')
+    integer, parameter :: OP_PING   = int(Z'09')
+    integer, parameter :: OP_PONG   = int(Z'0A')
 
 contains
 

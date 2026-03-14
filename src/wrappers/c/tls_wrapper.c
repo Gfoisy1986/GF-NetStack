@@ -23,6 +23,32 @@ static ssl_entry  ssl_table[MAX_SSL_CONNECTIONS];
    Internal helpers
    --------------------------------------------------------- */
 
+int tcp_connect(const char *host, int port) {
+    int sock;
+    struct sockaddr_in addr;
+
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) return -1;
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons(port);
+
+    if (inet_pton(AF_INET, host, &addr.sin_addr) <= 0) {
+        close(sock);
+        return -2;
+    }
+
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(sock);
+        return -3;
+    }
+
+    return sock;
+}
+
+
+
 static void ssl_table_init(void) {
     int i;
     for (i = 0; i < MAX_SSL_CONNECTIONS; i++) {
@@ -30,6 +56,12 @@ static void ssl_table_init(void) {
         ssl_table[i].ssl = NULL;
     }
 }
+
+
+
+
+
+
 
 static int ssl_table_add(int fd, SSL *ssl) {
     int i;
@@ -42,6 +74,18 @@ static int ssl_table_add(int fd, SSL *ssl) {
     }
     return -1; /* table full */
 }
+
+
+int register_tls_socket(SSL *ssl, int fd) {
+    if (ssl_table_add(fd, ssl) != 0) {
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
 
 static SSL *ssl_table_get(int fd) {
     int i;
@@ -99,6 +143,9 @@ void tls_init_server(void) {
 /* ---------------------------------------------------------
    Client-side TLS init (no cert for now)
    --------------------------------------------------------- */
+/* ---------------------------------------------------------
+   Client-side TLS init (no cert for now)
+   --------------------------------------------------------- */
 void tls_init_client(void) {
     SSL_library_init();
     SSL_load_error_strings();
@@ -109,12 +156,9 @@ void tls_init_client(void) {
     ctx_client = SSL_CTX_new(TLS_client_method());
     if (!ctx_client) {
         ERR_print_errors_fp(stderr);
-        return;
     }
-
-    /* No verification for now; can be tightened later */
-    SSL_CTX_set_verify(ctx_client, SSL_VERIFY_NONE, NULL);
 }
+
 
 /* ---------------------------------------------------------
    Create TCP listening socket
@@ -191,59 +235,23 @@ int tls_accept(int server) {
    Connect to remote server and perform TLS handshake (client)
    --------------------------------------------------------- */
 int tls_connect(const char *host, int port) {
-    int sock;
-    struct sockaddr_in addr;
-    SSL *ssl;
+    if (!ctx_client) return -1;
 
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) return -1;
+    int sock = tcp_connect(host, port);
+    if (sock < 0) return -2;
 
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
+    SSL *ssl = SSL_new(ctx_client);
+    SSL_set_fd(ssl, sock);
 
-    if (inet_pton(AF_INET, host, &addr.sin_addr) <= 0) {
-        close(sock);
-        return -2;
-    }
-
-    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    if (SSL_connect(ssl) <= 0) {
+        SSL_free(ssl);
         close(sock);
         return -3;
     }
 
-    if (!ctx_client) {
-        fprintf(stderr, "tls_connect: ctx_client is NULL\n");
-        close(sock);
-        return -4;
-    }
-
-    ssl = SSL_new(ctx_client);
-    if (!ssl) {
-        ERR_print_errors_fp(stderr);
-        close(sock);
-        return -5;
-    }
-
-    SSL_set_fd(ssl, sock);
-
-    if (SSL_connect(ssl) <= 0) {
-        ERR_print_errors_fp(stderr);
-        SSL_free(ssl);
-        close(sock);
-        return -6;
-    }
-
-    if (ssl_table_add(sock, ssl) != 0) {
-        fprintf(stderr, "tls_connect: SSL table full\n");
-        SSL_shutdown(ssl);
-        SSL_free(ssl);
-        close(sock);
-        return -7;
-    }
-
-    return sock;
+    return register_tls_socket(ssl, sock);
 }
+
 
 /* ---------------------------------------------------------
    Send data over TLS (server or client)
@@ -269,6 +277,13 @@ int tls_recv(int sock, char *buf, int maxlen) {
     }
     /* Fallback */
     return recv(sock, buf, maxlen, 0);
+}
+
+void tls_init() {
+    // If using OpenSSL:
+    SSL_library_init();
+    SSL_load_error_strings();
+    OpenSSL_add_all_algorithms();
 }
 
 /* ---------------------------------------------------------

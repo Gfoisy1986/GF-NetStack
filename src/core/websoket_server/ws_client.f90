@@ -1,65 +1,155 @@
-program tls_client
+program ws_client
     use iso_c_binding
     use tls_module
-    use websocket
     implicit none
 
-    integer(c_int) :: sock, nbytes
-    integer :: i, j
-    character(kind=c_char), dimension(:), allocatable :: host, request
-    character(kind=c_char), dimension(4096) :: buffer
-    character(len=:), allocatable :: json_msg, reply
+    integer(c_int) :: sock, n
+    integer :: i
+    character(len=:), allocatable :: handshake, response
+    character(len=4096) :: buf
+    character(len=:), allocatable :: msg, reply
 
+    ! Host as C-style char array
+    character(kind=c_char), dimension(:), allocatable :: host
     character(len=*), parameter :: host_str = "127.0.0.1"
 
-    ! Convert host string to C-style char array
+    print *, "WSS client starting..."
+
+    ! ---------------------------------------------------------
+    ! 1. Build C-string host  (i must be declared BEFORE this)
+    ! ---------------------------------------------------------
     host = [(host_str(i:i), i=1,len_trim(host_str)), c_null_char]
 
-    print *, "TLS JSON client starting..."
+    ! ---------------------------------------------------------
+    ! 2. TLS init + connect
+    ! ---------------------------------------------------------
+    call tls_init_client()
+    sock = tls_connect(host, 4433_c_int)
 
-    ! Initialize TLS client context
-    call tls_init_client_f()
-
-    ! Connect to TLS server
-    sock = tls_connect_f(host, 4433)
     if (sock < 0) then
-        print *, "ERROR: tls_connect_f failed, code=", sock
+        print *, "ERROR: tls_connect failed"
         stop
-    endif
+    end if
 
     print *, "Connected to TLS server."
 
-    ! ---------------------------------------
-    ! Send multiple JSON messages over TLS
-    ! ---------------------------------------
-    do i = 1, 3
-        json_msg = '{"cmd":"ping","seq":'//trim(adjustl(itoa(i)))//'}'
+    ! ---------------------------------------------------------
+    ! 3. Send WebSocket handshake
+    ! ---------------------------------------------------------
+    handshake = &
+        "GET / HTTP/1.1"//char(13)//char(10)// &
+        "Host: 127.0.0.1"//char(13)//char(10)// &
+        "Upgrade: websocket"//char(13)//char(10)// &
+        "Connection: Upgrade"//char(13)//char(10)// &
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=="//char(13)//char(10)// &
+        "Sec-WebSocket-Version: 13"//char(13)//char(10)// &
+        char(13)//char(10)
 
-        request = [(json_msg(j:j), j=1,len_trim(json_msg)), c_null_char]
+    n = tls_send(sock, handshake, len_trim(handshake))
+    print *, "Handshake sent."
 
-        call tls_send_f(sock, request, len_trim(json_msg))
-        print *, "Sent JSON:", '"'//trim(json_msg)//'"'
+    ! Read server handshake reply
+    n = tls_recv(sock, buf, len(buf))
+    if (n <= 0) then
+        print *, "Handshake failed."
+        stop
+    end if
 
-        nbytes = tls_recv_f(sock, buffer, size(buffer))
+    response = buf(1:n)
+    print *, "Server handshake reply:"
+    print *, trim(response)
 
-        if (nbytes > 0) then
-            reply = transfer(buffer(1:nbytes), "")
-            print *, "Received JSON:", '"'//trim(reply)//'"'
-        else
-            print *, "Server closed connection."
-            exit
-        endif
-    end do
+    ! ---------------------------------------------------------
+    ! 4. Send a WebSocket text frame
+    ! ---------------------------------------------------------
+    msg = "Hello from Fortran WebSocket client!"
+    call ws_send_frame(sock, msg)
+    print *, "Sent:", trim(msg)
 
-    call tls_close_f(sock)
-    print *, "TLS connection closed."
+    ! ---------------------------------------------------------
+    ! 5. Receive echo from server
+    ! ---------------------------------------------------------
+    call ws_recv_frame(sock, reply)
+    print *, "Received:", trim(reply)
+
+    ! ---------------------------------------------------------
+    ! 6. Close TLS
+    ! ---------------------------------------------------------
+    call tls_close(sock)
+    print *, "Connection closed."
 
 contains
 
-    function itoa(i) result(str)
-        integer, intent(in) :: i
-        character(len=12) :: str
-        write(str,'(I0)') i
-    end function itoa
+    ! ============================================================
+    ! Send masked WebSocket text frame (client → server)
+    ! ============================================================
+    subroutine ws_send_frame(sock, text)
+        integer(c_int), intent(in) :: sock
+        character(len=*), intent(in) :: text
 
-end program tls_client
+        integer :: lenp, i, n, hdr_len
+        character(len=4096) :: frame
+        real :: r(4)
+        integer(kind=1), dimension(4) :: mask
+        integer(kind=1) :: b
+
+        lenp = len_trim(text)
+
+        ! FIN + text opcode (0x81)
+        frame(1:1) = char(129)
+
+        ! Mask bit set (client MUST mask)
+        if (lenp <= 125) then
+            frame(2:2) = char(128 + lenp)
+            hdr_len = 2
+        else
+            print *, "Payload too large."
+            return
+        end if
+
+        ! Generate random mask
+        call random_number(r)
+        do i = 1, 4
+            mask(i) = int(r(i) * 255.0, kind=1)
+            frame(hdr_len+i:hdr_len+i) = achar(mask(i))
+        end do
+
+        ! Masked payload
+        do i = 1, lenp
+            b = ieor(int(iachar(text(i:i)),kind=1), mask(mod(i-1,4)+1))
+            frame(hdr_len+4+i:hdr_len+4+i) = achar(b)
+        end do
+
+        n = tls_send(sock, frame, hdr_len+4+lenp)
+    end subroutine ws_send_frame
+
+    ! ============================================================
+    ! Receive unmasked WebSocket text frame (server → client)
+    ! ============================================================
+    subroutine ws_recv_frame(sock, text)
+        integer(c_int), intent(in) :: sock
+        character(len=:), allocatable, intent(out) :: text
+
+        character(len=4096) :: buf
+        integer :: n, lenp
+
+        ! Read header
+        n = tls_recv(sock, buf, 2)
+        if (n /= 2) then
+            text = ""
+            return
+        end if
+
+        lenp = iachar(buf(2:2))   ! server never masks
+
+        ! Read payload
+        n = tls_recv(sock, buf, lenp)
+        if (n /= lenp) then
+            text = ""
+            return
+        end if
+
+        text = buf(1:lenp)
+    end subroutine ws_recv_frame
+
+end program ws_client

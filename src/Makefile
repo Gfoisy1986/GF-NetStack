@@ -16,18 +16,18 @@ BUILDDIR = build
 
 CORE_F90 = \
     wrappers/fortran/tcp.f90 \
-    wrappers/fortran/tls.f90 \
     wrappers/modules/ws_tls_shim.f90
 
 
 SERVER_F90 = \
-    wrappers/fortran/router.f90 \
+    wrappers/fortran/websocket.f90 \
+    wrappers/fortran/client.f90 \
     wrappers/fortran/select_wrapper.f90 \
     wrappers/fortran/crypto_wrapper.f90 \
-    wrappers/fortran/websocket.f90 \
     wrappers/fortran/websocket_handshake.f90 \
-    wrappers/fortran/wss_server.f90 \
-    wrappers/fortran/client.f90 \
+    wrappers/fortran/router.f90 \
+    wrappers/fortran/tls_module.f90 \
+    wrappers/fortran/ws_compat.f90 \
     core/websoket_server/ws_serveur.f90
 
 CLIENT_F90 = \

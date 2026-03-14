@@ -1,61 +1,85 @@
 program ws_serveur
-  !!
-  !! Minimal WSS server using your TLS layer + websocket.f90
-  !! - Listens on 4433
-  !! - Accepts WebSocket upgrade
-  !! - Echoes back any text message with a prefix
-  !!
-  use websocket
-  use tls_module          ! adjust to your actual module name
-  implicit none
+    use iso_c_binding
+    use tls_module
+    use websocket
 
-  integer :: server, client
-  character(len=4096) :: req
-  integer :: n
-  logical :: ok
-  character(len=:), allocatable :: msg
 
-  ! Initialize TLS server (cert/key paths: adapt to your setup)
-  call tls_init_server_f("server.pem", "server.key", server)
-  call tls_listen_f(server, 4433)
+    integer(c_int) :: listen_sock, client_sock
+    logical :: ok
+    character(len=:), allocatable :: payload
 
-  print *, "WSS server listening on port 4433..."
+    print *, "Starting WSS server..."
 
-  do
-     call tls_accept_f(server, client)
-     print *, "Client connected."
+    ! Global TLS init
+    call tls_init_server()
 
-     ! Read initial HTTP Upgrade request
-     call tls_recv_f(client, req, n)
-     if (n <= 0) then
-        call tls_close_f(client)
-        cycle
-     end if
 
-     ! Handle WebSocket upgrade
-     ok = ws_handle_upgrade(client, req(1:n))
-     if (.not. ok) then
-        print *, "Not a WebSocket upgrade, closing."
-        call tls_close_f(client)
-        cycle
-     end if
+    ! Create TLS listening socket on port 4433
+    listen_sock = tls_listen(4433_c_int)
+    if (listen_sock < 0_c_int) then
+        print *, "ERROR: tls_listen failed, code=", listen_sock
+        stop
+    end if
 
-     print *, "WebSocket handshake completed."
+    print *, "WSS server listening on port 4433"
 
-     ! Simple echo loop
-     do
-        ok = ws_recv_text(client, msg)
-        if (.not. ok) then
-           print *, "Client closed or error."
-           exit
+    do
+        ! Accept a TLS client
+        client_sock = tls_accept(listen_sock)
+        if (client_sock < 0_c_int) then
+            print *, "ERROR: tls_accept failed, code=", client_sock
+            cycle
         end if
 
-        print *, "Received: ", trim(msg)
-        call ws_send_text(client, "echo: "//trim(msg))
-     end do
+        print *, "Client connected."
 
-     call tls_close_f(client)
-     print *, "Client disconnected."
-  end do
+        ! WebSocket handshake
+        ok = ws_accept_handshake(client_sock)
+        if (.not. ok) then
+            print *, "Handshake failed."
+            call tls_close(client_sock)
+            cycle
+        end if
+
+        print *, "Handshake OK — WebSocket session started."
+
+        ! Message loop
+        do
+            ok = ws_recv_text(client_sock, payload)
+            if (.not. ok) then
+                print *, "Client disconnected or error."
+                exit
+            end if
+
+            print *, "TEXT:", trim(payload)
+
+            call ws_route(trim(payload))
+
+            call ws_send_text(client_sock, "echo: "//trim(payload))
+        end do
+
+        call tls_close(client_sock)
+        print *, "Client disconnected."
+    end do
+
+contains
+
+    logical function ws_accept_handshake(sock) result(ok)
+        integer(c_int), intent(in) :: sock
+        character(len=4096) :: req
+        integer(c_int) :: n
+
+        ok = .false.
+
+        n = tls_recv(sock, req, len(req))
+        if (n <= 0_c_int) return
+
+        ok = ws_handle_upgrade(sock, req(1:n))
+    end function ws_accept_handshake
+
+    subroutine ws_route(msg)
+        character(len=*), intent(in) :: msg
+        print *, "Routing:", trim(msg)
+    end subroutine ws_route
 
 end program ws_serveur
