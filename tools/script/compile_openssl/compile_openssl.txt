@@ -1,0 +1,122 @@
+Parfait Foisy — je te prépare **deux scripts complets**, propres, professionnels, prêts à coller dans ton repo :
+
+- **un script Windows (PowerShell)**
+- **un script Linux/Ubuntu (Bash)**
+
+Les deux compilent **OpenSSL 3.5.x LTS** et placent les fichiers dans une structure parfaite pour ton SDK :
+
+```
+deps/openssl/windows/
+deps/openssl/linux/
+```
+
+Aucun outil externe, aucune magie — juste du solide.
+
+---
+
+# 🟦 1) Script Windows (PowerShell) — `build_openssl_windows.ps1`
+
+> ⚠ Nécessite :
+> - Visual Studio Build Tools
+> - Perl (Strawberry Perl recommandé)
+> - NASM (pour l’ASM)
+
+```powershell
+# ================================
+# Build OpenSSL 3.5.x for Windows
+# ================================
+
+$VERSION = "3.5.5"
+$ARCHIVE = "openssl-$VERSION.tar.gz"
+$URL = "https://www.openssl.org/source/$ARCHIVE"
+
+# Create deps folder
+New-Item -ItemType Directory -Force -Path "deps\openssl\windows" | Out-Null
+
+# Download source
+Invoke-WebRequest -Uri $URL -OutFile $ARCHIVE
+
+# Extract
+tar -xvf $ARCHIVE
+Set-Location "openssl-$VERSION"
+
+# Configure for 64-bit Windows
+perl Configure VC-WIN64A --prefix="$PWD\install"
+
+# Build
+nmake
+nmake install
+
+# Copy to SDK deps folder
+Copy-Item -Recurse "install\*" "..\deps\openssl\windows"
+
+Write-Host "OpenSSL $VERSION built successfully for Windows!"
+```
+
+---
+
+# 🟩 2) Script Ubuntu/Linux (Bash) — `build_openssl_linux.sh`
+
+> ⚠ Nécessite :
+> - build-essential
+> - perl
+> - make
+> - gcc
+
+```bash
+#!/bin/bash
+# ================================
+# Build OpenSSL 3.5.x for Linux
+# ================================
+
+VERSION="3.5.5"
+ARCHIVE="openssl-$VERSION.tar.gz"
+URL="https://www.openssl.org/source/$ARCHIVE"
+
+# Create deps folder
+mkdir -p deps/openssl/linux
+
+# Download source
+wget $URL
+
+# Extract
+tar -xvf $ARCHIVE
+cd "openssl-$VERSION"
+
+# Configure for Linux x86_64
+./Configure linux-x86_64 --prefix=$(pwd)/install
+
+# Build
+make -j$(nproc)
+make install
+
+# Copy to SDK deps folder
+cp -r install/* ../../deps/openssl/linux/
+
+echo "OpenSSL $VERSION built successfully for Linux!"
+```
+
+---
+
+# 🧱 Résultat final dans ton SDK
+
+Après exécution des deux scripts :
+
+```
+deps/
+ └── openssl/
+      ├── windows/
+      │    ├── bin/
+      │    ├── lib/
+      │    └── include/
+      └── linux/
+           ├── bin/
+           ├── lib/
+           └── include/
+```
+
+Ton SDK devient **100% autonome**, sans dépendances externes.
+
+---
+
+# 🔥 Tu veux aussi la version macOS (ARM + Intel) pour compléter ton SDK multiplateforme ?
