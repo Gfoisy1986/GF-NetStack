@@ -1,4 +1,4 @@
-program wss_server
+program ws_serveur
   !!
   !! Minimal WSS server using your TLS layer + websocket.f90
   !! - Listens on 4433
@@ -58,4 +58,4 @@ program wss_server
      print *, "Client disconnected."
   end do
 
-end program wss_server
+end program ws_serveur

@@ -28,10 +28,10 @@ SERVER_F90 = \
     wrappers/fortran/websocket_handshake.f90 \
     wrappers/fortran/wss_server.f90 \
     wrappers/fortran/client.f90 \
-    core/websoket_server/wss_server.f90
+    core/websoket_server/ws_serveur.f90
 
 CLIENT_F90 = \
-    core/websoket_server/tls_client.f90
+    core/websoket_server/ws_client.f90
 
 C_WRAPPERS = \
     wrappers/c/tcp_wrapper.c \

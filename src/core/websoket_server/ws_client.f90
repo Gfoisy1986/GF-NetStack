@@ -1,23 +1,26 @@
 program tls_client
     use iso_c_binding
     use tls_module
+    use websocket
     implicit none
 
     integer(c_int) :: sock, nbytes
-    integer :: i
-    integer :: j
+    integer :: i, j
     character(kind=c_char), dimension(:), allocatable :: host, request
     character(kind=c_char), dimension(4096) :: buffer
     character(len=:), allocatable :: json_msg, reply
 
     character(len=*), parameter :: host_str = "127.0.0.1"
 
+    ! Convert host string to C-style char array
     host = [(host_str(i:i), i=1,len_trim(host_str)), c_null_char]
 
     print *, "TLS JSON client starting..."
 
+    ! Initialize TLS client context
     call tls_init_client_f()
 
+    ! Connect to TLS server
     sock = tls_connect_f(host, 4433)
     if (sock < 0) then
         print *, "ERROR: tls_connect_f failed, code=", sock
@@ -26,9 +29,9 @@ program tls_client
 
     print *, "Connected to TLS server."
 
-    ! ---------------------------
-    ! Send multiple JSON messages
-    ! ---------------------------
+    ! ---------------------------------------
+    ! Send multiple JSON messages over TLS
+    ! ---------------------------------------
     do i = 1, 3
         json_msg = '{"cmd":"ping","seq":'//trim(adjustl(itoa(i)))//'}'
 
