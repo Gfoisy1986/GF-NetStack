@@ -1,17 +1,57 @@
-# Fortran95 + F90GL UI API (Vision & Concept)
+# Wrappers C & Fortran
 
-Cette section accueillera une API moderne permettant de créer des interfaces graphiques en Fortran95 en s’appuyant sur **f90GL** (OpenGL pour Fortran).  
-L’objectif est d’offrir une couche simple, intuitive et portable pour concevoir des applications graphiques, des outils internes, des dashboards et des interfaces interactives — tout en restant 100% Fortran.
+Ce dossier contient les couches de “pont” entre les bibliothèques natives (C) et le code Fortran du SDK.
 
-## 🎯 Vision
-Créer une API haut niveau qui permet d’écrire des interfaces graphiques comme ceci :
+Les wrappers sont séparés en deux niveaux :
 
-```fortran
-call UI_Begin("Ma Fenêtre", width=800, height=600)
+- `c/` : adaptation côté C
+- `fortran/` : interfaces FFI côté Fortran
 
-call UI_Label("Température actuelle : 22.5°C")
-if (UI_Button("Rafraîchir")) then
-    call RefreshData()
-end if
+---
 
-call UI_End()
+## c/ — Wrappers C
+
+📁 `src/wrappers/c/`
+
+Cette couche :
+
+- encapsule les appels aux bibliothèques natives (dans `deps/`)
+- normalise les signatures C
+- masque les détails spécifiques aux plateformes
+- expose une API C stable, pensée pour être appelée depuis Fortran
+
+En résumé :  
+**C’est la couche “adaptation native” entre `deps/` et Fortran.**
+
+---
+
+## fortran/ — Wrappers Fortran (FFI)
+
+📁 `src/wrappers/fortran/`
+
+Cette couche :
+
+- définit les `interface ... bind(C)`
+- mappe les types C ↔ Fortran
+- gère les pointeurs, chaînes, tableaux
+- appelle directement les fonctions définies dans `src/wrappers/c/`
+
+En résumé :  
+**C’est la passerelle FFI entre le monde C et les modules Fortran.**
+
+---
+
+## Relation avec le reste du SDK
+
+Flux logique :
+
+- `deps/` → bibliothèques natives (C, externes)
+- `src/wrappers/c/` → adaptation C
+- `src/wrappers/fortran/` → FFI Fortran
+- `src/modules/` → logique Fortran regroupée
+- `src/api/` → API haut niveau
+- `src/core/` → apps/démos internes
+- `examples/` → exemples simples pour les utilisateurs
+
+Les wrappers ne doivent **pas** contenir de logique métier :  
+ils servent uniquement à connecter proprement C ↔ Fortran.
