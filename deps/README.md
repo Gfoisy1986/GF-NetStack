@@ -1,7 +1,6 @@
-# GF‑Fortran‑SDK
+# GF‑Fortran‑SDK (Fortran95)
 
-### Dépendances externes --  External Dependencies
-
+### En cours de développement...  Currently in development...
 
 <details>
   <summary>🇫🇷 Version Française</summary>
@@ -133,3 +132,13 @@ redistributes them solely to provide a complete, ready‑to‑use SDK.
 Please refer to each dependency’s LICENSE file for details.
 
 </details>
+
+---
+
+## 👤 Auteur  /  Author
+
+* Guillaume Foisy  
+
+* Passionné par la modernisation de l’écosystème Fortran
+
+* Dedicated to modernizing the Fortran ecosystem
