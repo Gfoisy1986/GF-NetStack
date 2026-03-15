@@ -1,55 +1,121 @@
-# How to use & install dependacy :
+# GF‑Fortran‑SDK (Fortran95)
 
-1- install:
+### En cours de développement...  Currently in development...
 
-- GFortan on System $path
+---
 
-- lua 5.4 on System $path
-
-
-Bingo !
-
-pour le reste tu va avoir besoin de soit un Terminal ou PowerShell.
+<details>
+  <summary>🇫🇷 Version Française</summary>
 
 
-J'ai ecrit un script LUA simplifier les tache comme :
+## 🔧 Installation des dépendances
 
+Avant d’utiliser les scripts, assure‑toi d’avoir installé :
 
-Linux examples:
+GFortran et accessible dans ton PATH système
+
+Lua 5.4 également dans ton PATH système
+
+Une fois ces deux outils installés…
+👉 Bingo ! Tu es prêt.
+
+Pour le reste, tu auras simplement besoin d’un terminal (Linux/macOS) ou PowerShell (Windows).
+
+🧰 Scripts Lua & Commandes disponibles
+J’ai écrit un script Lua pour simplifier les tâches courantes.
+Voici quelques exemples sous Linux :
+
+▶️ Test rapide
 
 ```bash
 
----
-
-./gf.sh hello  
-
-->  
-
-Lua says hi!
-
----
-
- cest un petit test voir si tout focntionne.
-
+./gf.sh hello
 
 ```
 
-* ./gf.sh doctor ->
+* Résultat : Hello from the unified GF CLI!
 
-* ./gf.sh new @ARG ->
+C’est juste un petit test pour vérifier que tout fonctionne.
 
-* ./gf.sh build @ARG ->
+▶️ Commandes principales
+Code
+./gf.sh doctor
+→ Vérifie l’environnement, les dépendances et l’état du SDK.
 
-* ./gf.sh clean @ARG ->
+Code
+./gf.sh new @ARG
+→ Crée un nouveau module/projet nommé @ARG.
+
+Code
+./gf.sh build @ARG
+→ Compile @ARG.
+
+Code
+./gf.sh clean @ARG
+→ Nettoie les fichiers générés pour @ARG.
+
+---
+
+</details>
+
+---
+
+<details>
+  <summary>🇬🇧 English Version</summary>
+
+## 🔧 Installing Dependencies
+
+Before using the scripts, make sure you have:
+
+GFortran installed and available in your system PATH
+
+Lua 5.4 also available in your system PATH
+
+Once both are installed…
+
+👉 Bingo! You’re good to go.
+
+You’ll only need a terminal (Linux/macOS) or PowerShell (Windows) for the rest.
+
+🧰 Lua Script & Available Commands
+A Lua script is included to simplify common tasks.
+Here are some Linux examples:
+
+▶️ Quick test
+Code
+./gf.sh hello
+Output: Hello from the unified GF CLI!
+
+This is just a small test to confirm everything works.
+
+▶️ Main commands
+Code
+./gf.sh doctor
+→ Checks environment, dependencies, and SDK status.
+
+Code
+./gf.sh new @ARG
+→ Creates a new module/project named @ARG.
+
+Code
+./gf.sh build @ARG
+→ Builds @ARG.
+
+Code
+./gf.sh clean @ARG
+→ Cleans generated files for @ARG.
+
+---
+
+</details>
 
 
 ---
 
+## 👤 Auteur  /  Author
 
-À venir
+* Guillaume Foisy  
 
+* Passionné par la modernisation de l’écosystème Fortran
 
-* ./gf.sh mk @ARG @type -> Créer @ARG @type ( @type = dossier complet example)
-* ./gf.sh cp @ARG @ARG @type-> copy @ARG to @ARG @type ( @type = dossier complet example)
-* ./gf.sh cr @ARG @ARG -> rename @ARG to @ARG
-* ./gf.sh rm @ARG @type-> Delete @ARG @type 
+* Dedicated to modernizing the Fortran ecosystem
