@@ -49,25 +49,7 @@ if p then
             if arch == "amd64" or arch == "x86_64" then arch = "x86_64" end
                 if arch == "arm64" or arch == "aarch64" then arch = "arm64" end
 
-                    ------------------------------------------------------------
-                    -- 4. System‑wide tool detection
-                    ------------------------------------------------------------
-                    local function tool_exists(name)
-                    local cmd = is_windows
-                    and ('where ' .. name .. ' >nul 2>nul')
-                    and ('command -v ' .. name .. ' >/dev/null 2>&1')
-
-                    local ok = os.execute()   --os.execute(cmd) remove boolean and work :D
-                    return ok == true or ok == 0
-                    end
-
-                    local function require_tool(name)
-                    if not tool_exists(name) then
-                        print("[GF] Required tool not found:", name)
-                        print("Install it system‑wide or add it to PATH.")
-                        os.exit(1)
-                        end
-                        end
+                   
 
                         ------------------------------------------------------------
                         -- 5. Command dispatcher
