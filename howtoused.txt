@@ -1,0 +1,10 @@
+# How to use & install dependacy :
+
+1- install:
+
+- GFortan
+
+- lua 5.4
+
+- binutils
+
