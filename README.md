@@ -11,7 +11,8 @@
 ### SDK moderne, modulaire et extensible pour Fortran95
 
 GF‑Fortran‑SDK a pour ambition de devenir un **écosystème complet** pour développer des applications modernes en Fortran95.  
-Le projet dépasse largement la simple notion “d’outils réseau” : il vise à offrir un **SDK modulaire, clair et extensible**, regroupant tout ce dont un développeur Fortran a besoin pour créer des applications réseau, graphiques et interactives.
+Le projet dépasse largement la simple notion “d’outils réseau” : il vise à offrir un **SDK modulaire, clair et extensible**, 
+regroupant tout ce dont un développeur Fortran a besoin pour créer des applications réseau, graphiques et interactives.
 
 ---
 
@@ -82,50 +83,19 @@ Fenêtres, boutons, labels, sliders, layout automatique, intégration réseau.
 
 ---
 
-## 📦 Dépendances
-- OpenSSL
-- f90gl
+## 📦 Dépendances 
+
+* ('system' mean need to be install system wide & in $PATH)
+
+* f90gl (we include lib in module no need to install but a sdk dependacy)
+
+- OpenSSL   (Cert & Key 'system')
+- gcc / g++ (compiler   'system')
+- gfortran  (compiler   'system')
+- binutils  (linker     'system')
+- lua       (scripting  'system')
 
 ---
-
-## 🧰 Outils inclus dans le SDK
-
-### 🔵 Lua — Langage de script (MIT) Version 5.5.0
-- Executable testée sur tout c'est plateforme:
-* Windows ->  i686 / x86_64 and ucrt64 / arm64
-* Linux   ->  ubuntu(x86_64)
-- Léger, rapide, multiplateforme  
-- Parfait pour automatiser les builds, générer du code et écrire des outils internes  
-- Licence MIT très permissive  
-- Intégration simple avec C et Fortran  
-
-### 🟠 NASM — Assembleur x86/x64 (BSD 2‑clause) Version 3.01 
-- Executable testée sur tout c'est plateforme:
-* Windows -> x86_64 / x86_32
-* DOS     -> 386+
-- Assembleur moderne, stable et très utilisé  
-- Idéal pour les routines bas niveau et l’optimisation  
-- Licence BSD très permissive  
-- Facile à redistribuer dans le SDK  
-
-### 🟦 GCC — Compilateur C (GPL) Version 13.2.0 
-- Executable testée sur tout c'est plateforme:
-* Windows -> x86_64
-- Backend C utilisé pour les wrappers et les modules système  
-- Très portable, fiable et mature  
-- Redistribuable avec simple lien vers les sources GCC  
-
-### 🟩 GFortran — Compilateur Fortran95 (GPL) Version 13.2.0
-- Executable testée sur tout c'est plateforme:
-* Windows -> x86_64
-- Compilateur recommandé pour le SDK  
-- Compatible Fortran95+  
-- Redistribuable avec simple lien vers les sources GCC  
-- Base principale pour compiler les modules du SDK  
-
-
----
-
 
 ## 👤 Auteur
 Guillaume Foisy  
@@ -214,48 +184,17 @@ Windows, buttons, labels, sliders, automatic layout, network integration.
 
 ---
 
-## 📦 Dependencies
-- OpenSSL
-- f90gl
+## 📦 Dépendances 
 
----
+* ('system' mean need to be install system wide & in $PATH)
 
-## 🧰 Tools Included in the SDK  
+* f90gl (we include lib in module no need to install but a sdk dependacy)
 
-
-### 🔵 Lua — Scripting Language (MIT License) Version 5.5.0
-- Executable tested on all listed plateforms:
-* Windows ->  i686 / x86_64 and ucrt64 / arm64
-* Linux   ->  ubuntu(x86_64)
-- Lightweight, fast, and fully cross‑platform  
-- Ideal for build automation, code generation, and internal tooling  
-- MIT license (very permissive)  
-- Easy to embed in C applications and integrate with GCC/gfortran  
-
-### 🟠 NASM — x86/x64 Assembler (BSD 2‑Clause License) Version 3.01 
-- Executable tested on all listed plateforms:
-* Windows -> x86_64 / x86_32
-* DOS     -> 386+
-- Modern, stable assembler for low‑level routines  
-- Perfect for performance‑critical code and system‑level modules  
-- BSD license (permissive and redistribution‑friendly)  
-- Simple to package inside the SDK  
-
-### 🟦 GCC — C Compiler (GPL License) Version 13.2.0
-- Executable tested on all listed plateforms:
-* Windows -> x86_64
-- Backend used for C wrappers and system modules  
-- Mature, portable, and widely supported  
-- Redistributable as long as a link to GCC source code is provided  
-- Works seamlessly with NASM and Lua tooling  
-
-### 🟩 GFortran — Fortran95 Compiler (GPL License) Version 13.2.0 
-- Executable tested on all listed plateforms:
-* Windows -> x86_64
-- Recommended compiler for the SDK  
-- Fully compatible with Fortran95+  
-- Redistributable with a link to GCC sources  
-- Core component for building the SDK’s Fortran modules  
+- OpenSSL   (Cert & Key 'system')
+- gcc / g++ (compiler   'system')
+- gfortran  (compiler   'system')
+- binutils  (linker     'system')
+- lua       (scripting  'system')
 
 
 ---
