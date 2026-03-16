@@ -5,7 +5,7 @@
 
 
 
-### En cours de développement...  Currently in development...
+## En cours de développement...  Currently in development...
 
 ---
 
@@ -13,7 +13,7 @@
   <summary>🇫🇷 Version Française</summary>
 
  
-## SDK moderne, modulaire et extensible pour Fortran95 & Purebasic
+### SDK moderne, modulaire et extensible pour Fortran95 & Purebasic
 
 
 ## 🧱 Backend réseau moderne
