@@ -10,11 +10,6 @@
  
 ## SDK moderne, modulaire et extensible pour Fortran95
 
-GF‑Fortran‑SDK a pour ambition de devenir un **écosystème complet** pour développer des applications modernes en Fortran95.  
-Le projet dépasse largement la simple notion “d’outils réseau” : il vise à offrir un **SDK modulaire, clair et extensible**, 
-regroupant tout ce dont un développeur Fortran a besoin pour créer des applications réseau, graphiques et interactives.
-
----
 
 ## 🧱 Backend réseau moderne
 - Modules indépendants : **TCP**, **TLS**, **WebSocket**  
@@ -38,12 +33,7 @@ etc...
 
 ---
 
-## 🎨 Future API UI (f90GL)
-Pour créer des interfaces modernes :  
-Fenêtres, boutons, labels, sliders, layout automatique, intégration réseau.
 
-
----
 
 </details>
 
@@ -53,13 +43,7 @@ Fenêtres, boutons, labels, sliders, layout automatique, intégration réseau.
   <summary>🇬🇧 English Version</summary>
 
 # GF‑Fortran‑SDK  
-### A modern, modular, and extensible SDK for Fortran95
 
-GF‑Fortran‑SDK aims to become a **complete ecosystem** for building modern applications in Fortran95.  
-It goes far beyond “network tools”: the goal is to provide a **modular, clean, and extensible SDK** ,
-that gives Fortran developers everything they need to build networked, graphical, and interactive applications.
-
----
 
 ## 🧱 Modern Network Backend
 - Independent modules: **TCP**, **TLS**, **WebSocket**  
@@ -83,11 +67,6 @@ etc...
 
 ---
 
-## 🎨 Future UI API (f90GL)
-For building modern graphical interfaces:  
-Windows, buttons, labels, sliders, automatic layout, network integration.
-
----
 
 </details>
 
