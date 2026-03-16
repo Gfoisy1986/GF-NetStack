@@ -13,7 +13,7 @@
 
 ## 🧱 Backend réseau moderne
 - Modules indépendants : **TCP**, **TLS**, **WebSocket**  
-- Wrappers C minimalistes pour contourner les limites du standard F95  
+- Wrappers C minimalistes pour contourner les limites du standard F95 & Purebasic 
 - Architecture propre, stable et maintenable  
 - Gestion multi‑clients via `select()`  
 - WebSocket conforme **RFC 6455**
@@ -35,7 +35,7 @@
 
 ## 🧱 Modern Network Backend
 - Independent modules: **TCP**, **TLS**, **WebSocket**  
-- Minimal C wrappers to overcome F95 limitations  
+- Minimal C wrappers to overcome F95 & Purebasic limitations  
 - Clean, stable, maintainable architecture  
 - Multi‑client handling via `select()`  
 - WebSocket compliant with **RFC 6455**
