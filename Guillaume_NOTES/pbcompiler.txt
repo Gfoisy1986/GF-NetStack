@@ -1,0 +1,90 @@
+Yes — **PureBasic can absolutely be compiled from the command line**, without opening the IDE.  
+In fact, PureBasic provides a full command‑line compiler called **`pbcompiler`** on all platforms.
+
+Here’s the clear, practical breakdown so you can integrate it into your CLI or build scripts.
+
+---
+
+# 🛠️ **PureBasic Command‑Line Compilation**
+
+PureBasic installs a standalone compiler:
+
+- **Windows:** `pbcompiler.exe`  
+- **Linux:** `pbcompiler`  
+- **macOS:** `pbcompiler`
+
+You can call it directly from any terminal, script, or automation tool.
+
+---
+
+## ▶️ **Basic usage**
+
+```bash
+pbcompiler myfile.pb
+```
+
+This compiles `myfile.pb` using default settings.
+
+---
+
+## ⚙️ **Common useful flags**
+
+| Purpose | Flag | Example |
+|--------|------|---------|
+| Output executable name | `/EXE` | `pbcompiler source.pb /EXE myapp.exe` |
+| Enable debug mode | `/DEBUG` | `pbcompiler source.pb /DEBUG` |
+| Optimize | `/OPTIMIZE` | `pbcompiler source.pb /OPTIMIZE` |
+| Console mode | `/CONSOLE` | `pbcompiler source.pb /CONSOLE` |
+| Disable requester dialogs | `/QUIET` | `pbcompiler source.pb /QUIET` |
+| Compile only (no linking) | `/NOEXE` | `pbcompiler source.pb /NOEXE` |
+
+---
+
+## 🧪 **Example: Build from your Lua CLI**
+
+### Windows (PowerShell)
+
+```powershell
+pbcompiler.exe src\main.pb /EXE build\myapp.exe /QUIET /OPTIMIZE
+```
+
+### Linux / macOS
+
+```bash
+pbcompiler src/main.pb /EXE build/myapp /QUIET /OPTIMIZE
+```
+
+---
+
+## 📍 **Where is pbcompiler located?**
+
+### Windows
+Usually here:
+
+```
+C:\Program Files\PureBasic\Compilers\pbcompiler.exe
+```
+
+### Linux / macOS
+If installed system‑wide:
+
+```
+/opt/purebasic/compilers/pbcompiler
+```
+
+Or inside your PureBasic folder.
+
+You can add it to your PATH for convenience.
+
+---
+
+## 🎉 **Conclusion**
+
+Yes — you can fully compile PureBasic apps from the terminal, and it integrates perfectly with your Lua‑based CLI (`gf.sh` / `gf.ps1`).  
+If you want, I can help you:
+
+- add a `gf build-pb` command,
+- auto‑detect PureBasic on each OS,
+- or write a clean cross‑platform wrapper for `pbcompiler`.
+
+Just tell me how deep you want to go.
