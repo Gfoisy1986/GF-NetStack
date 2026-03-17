@@ -26,7 +26,7 @@
 
 ---
 
-## 🧰 Command‑Line Interface (CLI)
+## 🧰 Command‑Line Interface (CLI)   (Ne fonctione pas en ce moment...)
 J’ai écrit un petit script Lua pour simplifier les tâches courantes du SDK.
 Il fonctionne de manière identique sur Windows, Linux et macOS.
 
@@ -123,7 +123,7 @@ Ce test permet simplement de vérifier que tout fonctionne correctement.
 ---
 
 
-## 🧰 Command‑Line Interface (CLI)
+## 🧰 Command‑Line Interface (CLI)  (Not working at this time...)
 I wrote a small Lua script to simplify common SDK tasks.
 It behaves the same on Windows, Linux, and macOS.
 
