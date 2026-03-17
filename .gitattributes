@@ -1,4 +1,11 @@
-# Auto detect text files and perform LF normalization
-* text=auto
-tools/** linguist-vendored
+# Force Fortran files to be counted as Fortran
+*.f90 linguist-language=Fortran
+*.f95 linguist-language=Fortran
+*.f03 linguist-language=Fortran
+*.f08 linguist-language=Fortran
+*.f   linguist-language=Fortran
+
+# Force PureBasic files to be counted as PureBasic
+*.pb linguist-language=PureBasic
+*.pbi linguist-language=PureBasic
 
