@@ -6,8 +6,8 @@
 *.f   linguist-language=Fortran
 
 # PureBasic → mapped to BASIC (best match)
-*.pb  linguist-language=Basic
-*.pbi linguist-language=Basic
+*.pb  linguist-language=PureBasic
+*.pbi linguist-language=PureBasic
 
 # Optional: hide scripting languages from stats
 *.lua linguist-vendored
