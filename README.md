@@ -58,6 +58,6 @@
 
 * Guillaume Foisy  
 
-* Passionné par la modernisation de l’écosystème Fortran & Purebasic
+* Passionné par la modernisation de l’écosystème Fortran95 & Purebasic
 
-* Dedicated to modernizing the Fortran & Purebasic ecosystem
+* Dedicated to modernizing the Fortran95 & Purebasic ecosystem
