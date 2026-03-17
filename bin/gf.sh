@@ -12,8 +12,13 @@ if ! command -v lua >/dev/null 2>&1; then
     echo "[GF] lua not found in PATH. Lua features will be disabled."
 fi
 
+# Detect PureBasic compiler (optional)
+if ! command -v pbcompiler >/dev/null 2>&1; then
+    echo "[GF] pbcompiler not found in PATH. PureBasic features will be disabled."
+fi
+
 # Set SDK root
 GF_SDK_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Run GF CLI
-lua "$GF_SDK_ROOT/scripts/gf.lua" "$@"
+lua "$GF_SDK_ROOT/script/gf.lua" "$@"

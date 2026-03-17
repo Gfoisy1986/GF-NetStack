@@ -1,0 +1,111 @@
+Adding **pbcompiler** to your PATH on Ubuntu 24.04 is straightforward, but PureBasic’s Linux installer doesn’t do it automatically. Here’s the clean, reliable way to do it—exactly the kind of multiplatform hygiene you care about.
+
+---
+
+# 🌱 Step 1 — Find where PureBasic is installed
+
+If you installed PureBasic manually, it’s usually in one of these:
+
+- `~/purebasic`
+- `~/PureBasic`
+- `/opt/purebasic`
+- `/opt/purebasic/purebasic` (older versions)
+
+Inside that folder, you’ll see:
+
+```
+compilers/pbcompiler
+compilers/pbcompiler_x64
+```
+
+Pick the one you want (usually `pbcompiler`).
+
+Let’s assume your install is here:
+
+```
+/opt/purebasic
+```
+
+---
+
+# 🛠 Step 2 — Add pbcompiler to PATH (permanent)
+
+Edit your shell config:
+
+### For Bash
+```sh
+nano ~/.bashrc
+```
+
+### For Zsh
+```sh
+nano ~/.zshrc
+```
+
+Add this line at the bottom:
+
+```sh
+export PATH="/opt/purebasic/compilers:$PATH"
+```
+
+Save, then reload:
+
+```sh
+source ~/.bashrc
+```
+
+or
+
+```sh
+source ~/.zshrc
+```
+
+---
+
+# ✔ Step 3 — Verify
+
+```sh
+pbcompiler --version
+```
+
+If it prints something like:
+
+```
+PureBasic 6.10 LTS (Linux - x64)
+```
+
+…you’re good.
+
+---
+
+# 🧠 Bonus: Auto-detect both pbcompiler and pbcompiler_x64
+
+If you want your SDK launcher to be bulletproof:
+
+```sh
+PB_COMPILER=""
+for cmd in pbcompiler pbcompiler_x64; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+        PB_COMPILER="$cmd"
+        break
+    fi
+done
+
+if [ -z "$PB_COMPILER" ]; then
+    echo "[GF] PureBasic compiler not found."
+else
+    echo "[GF] Found PureBasic compiler: $PB_COMPILER"
+fi
+```
+
+This matches your multiplatform philosophy perfectly.
+
+---
+
+If you want, I can also help you:
+
+- auto‑detect PureBasic on macOS `.app` bundles  
+- create a cross‑platform launcher that exports PB paths automatically  
+- integrate PB detection into your SDK onboarding docs  
+
+Just tell me how far you want to push it.
