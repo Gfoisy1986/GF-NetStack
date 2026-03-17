@@ -15,7 +15,7 @@
 *.ps1 linguist-vendored
 *.bat linguist-vendored
 *.c   linguist-vendored
-Makefile linguist-vendored
+
 
 # Keep Git behavior normal
 * text=auto
