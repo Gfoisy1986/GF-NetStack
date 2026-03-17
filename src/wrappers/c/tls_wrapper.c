@@ -275,7 +275,6 @@ int tls_recv(int sock, char *buf, int maxlen) {
         int ret = SSL_read(ssl, buf, maxlen);
         return ret;
     }
-    /* Fallback */
     return recv(sock, buf, maxlen, 0);
 }
 

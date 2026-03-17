@@ -1,5 +1,15 @@
 Absolutely — and this is a fun one because PureBasic’s FFI is *very* straightforward once you see the pattern.  
 Let’s walk through it cleanly and give you a **ready‑to‑use PureBasic import** for your `tcp.c` wrapper.
+gcc -shared -fPIC tls.c -o libtls.so -lssl -lcrypto
+gcc -shared -fPIC tls.c -o libtls.so -lssl -lcrypto
+gcc -shared -fPIC tls.c -o libtls.so -lssl -lcrypto
+gcc -shared -fPIC tls.c -o libtls.so -lssl -lcrypto
+gcc -shared -fPIC tls.c -o libtls.so -lssl -lcrypto
+gcc -shared -fPIC tls.c -o libtls.so -lssl -lcrypto
+gcc -shared -fPIC tls.c -o libtls.so -lssl -lcrypto
+gcc -shared -fPIC tls.c -o libtls.so -lssl -lcrypto
+gcc -shared -fPIC tls.c -o libtls.so -lssl -lcrypto
+gcc -shared -fPIC tls.c -o libtls.so -lssl -lcrypto
 
 ---
 
