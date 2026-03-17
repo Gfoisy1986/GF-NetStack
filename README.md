@@ -131,15 +131,13 @@ It behaves the same on Windows, Linux, and macOS.
 
 Windows:
 
-```bash
 .\gf.ps1
-```
+
 
 Linux & macOS:
 
-```bash
 ./gf.sh
-```
+
 
 
 ### ▶️ Quick Test
