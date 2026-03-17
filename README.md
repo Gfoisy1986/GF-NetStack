@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="assets/gf-netstack.png" width="1280">
+  <img src="assets/gf-netstack.png" width="640">
 </p>
 
 
