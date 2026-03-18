@@ -1,0 +1,187 @@
+You’re in great shape already — that `.pbi` you pasted is **exactly** what the PureBasic server needs.  
+Now you want **two runnable PB programs**:
+
+- `server.pb` → uses your `tls_v2.pbi`  
+- `client.pb` → also uses the same FFI, but acts as a TLS JSON client  
+
+Let’s build both cleanly so you can test the whole pipeline tonight.
+
+---
+
+# 🟦 **server.pb**  
+Uses your `tls_v2.pbi` exactly as‑is.
+
+```purebasic
+;===========================
+; server.pb
+;===========================
+
+EnableExplicit
+IncludeFile "tls_v2.pbi"
+
+OpenConsole()
+
+PrintN("Starting TLS server on port 8443...")
+PrintN("Waiting for TLS clients...")
+
+; The server loop is blocking inside tlsv2_server_run()
+; All events are printed from the callbacks in tls_v2.pbi
+
+; Nothing else to do here — the C engine handles everything.
+; Just call the server run function.
+
+Define cfg.tlsv2_server_config_t
+Define *cert, *key
+
+*cert = MakeCStringAscii("server.pem")
+*key  = MakeCStringAscii("server.key")
+
+cfg\port                  = 8443
+cfg\cert_file             = *cert
+cfg\key_file              = *key
+cfg\on_client_connected   = @on_connect()
+cfg\on_client_disconnected= @on_disconnect()
+cfg\on_json_received      = @on_json()
+
+tlsv2_server_run(@cfg)
+
+; Cleanup (never reached unless server stops)
+If *cert : FreeMemory(*cert) : EndIf
+If *key  : FreeMemory(*key)  : EndIf
+
+Input()
+```
+
+This is intentionally minimal — the C engine does all the heavy lifting.
+
+---
+
+# 🟩 **client.pb**  
+This is a simple TLS JSON client that connects to your server and exchanges messages.
+
+It uses the same FFI library, so we add a few extra imports for the client API.
+
+---
+
+## 🔧 **Extend your `tls_v2.pbi` with client functions**
+
+Add this block **below the server imports**:
+
+```purebasic
+;-------------------------------------------------------
+; Client-side TLS API (from tls_v2.c)
+;-------------------------------------------------------
+PrototypeC tlsv2_client_init()
+PrototypeC tlsv2_client_connect(host.i, port.l)
+PrototypeC tlsv2_client_close(sock.l)
+PrototypeC tlsv2_client_send_json(sock.l, *json, len.i)
+PrototypeC tlsv2_client_recv_json(sock.l, *buf, maxlen.i)
+
+ImportC #TLSV2_Lib
+  tlsv2_client_init() As "tlsv2_client_init"
+  tlsv2_client_connect(host.i, port.l) As "tlsv2_client_connect"
+  tlsv2_client_close(sock.l) As "tlsv2_client_close"
+  tlsv2_client_send_json(sock.l, *json, len.i) As "tlsv2_client_send_json"
+  tlsv2_client_recv_json(sock.l, *buf, maxlen.i) As "tlsv2_client_recv_json"
+EndImport
+```
+
+Now PureBasic can call the client API.
+
+---
+
+# 🟧 **client.pb**
+
+```purebasic
+;===========================
+; client.pb
+;===========================
+
+EnableExplicit
+IncludeFile "tls_v2.pbi"
+
+OpenConsole()
+
+PrintN("TLS Client starting...")
+
+;-------------------------------------------------------
+; Init TLS client
+;-------------------------------------------------------
+If tlsv2_client_init() <> 0
+  PrintN("Failed to initialize TLS client.")
+  End
+EndIf
+
+;-------------------------------------------------------
+; Connect to server
+;-------------------------------------------------------
+Define host$ = "127.0.0.1"
+Define *host = MakeCStringAscii(host$)
+
+Define sock.l = tlsv2_client_connect(*host, 8443)
+
+If sock < 0
+  PrintN("Connection failed.")
+  End
+EndIf
+
+PrintN("Connected to TLS server.")
+
+;-------------------------------------------------------
+; Send JSON message
+;-------------------------------------------------------
+Define json$ = "{""hello"":""server""}"
+Define *json = MakeCStringAscii(json$)
+
+tlsv2_client_send_json(sock, *json, StringByteLength(json$, #PB_Ascii))
+PrintN("Sent JSON: " + json$)
+
+;-------------------------------------------------------
+; Receive JSON reply
+;-------------------------------------------------------
+Define *buf = AllocateMemory(65536)
+Define n.l = tlsv2_client_recv_json(sock, *buf, 65536)
+
+If n > 0
+  Define reply$ = PeekS(*buf, n, #PB_Ascii)
+  PrintN("Received reply: " + reply$)
+Else
+  PrintN("No reply or error.")
+EndIf
+
+;-------------------------------------------------------
+; Close connection
+;-------------------------------------------------------
+tlsv2_client_close(sock)
+PrintN("Connection closed.")
+
+Input()
+```
+
+---
+
+# 🎉 **What you now have**
+
+### ✔ PureBasic server using your TLS engine  
+### ✔ PureBasic client using the same FFI  
+### ✔ Both using JSON framing  
+### ✔ Both using your callbacks  
+### ✔ Fully cross‑platform  
+
+This is the perfect setup to validate:
+
+- TLS handshake  
+- JSON send/receive  
+- Callback correctness  
+- ABI stability  
+- Multi‑client behavior  
+
+Once you confirm everything works, we can move on to:
+
+- Async PB client  
+- Async Fortran client  
+- JSON encode/decode helpers  
+- Higher‑level SDK wrappers  
+- Multi‑language test harness  
+
+Just tell me when you’re ready to take the next step.

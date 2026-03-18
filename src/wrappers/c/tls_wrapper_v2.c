@@ -16,8 +16,33 @@
 
 #define TLSV2_MAX_CLIENTS   128
 #define TLSV2_MAX_JSON_SIZE 65536
+// ======================================================
+// SERVER-SIDE TYPES AND GLOBALS (must appear BEFORE helpers)
+// ======================================================
 
-typedef struct tlsv2_client_s tlsv2_client_t;
+#define MAX_CLIENTS 64
+
+
+typedef enum {
+    TLSV2_STATE_UNUSED = 0,
+    TLSV2_STATE_HANDSHAKE,
+    TLSV2_STATE_OPEN,
+    TLSV2_STATE_CLOSING
+} tlsv2_client_state_t;
+
+typedef struct tlsv2_client_s {
+    int                  fd;
+    SSL                 *ssl;
+    tlsv2_client_state_t state;
+
+    unsigned char in_buf[TLSV2_MAX_JSON_SIZE + 4];
+    size_t        in_used;
+    uint32_t      expected_len;
+
+    unsigned char out_buf[TLSV2_MAX_JSON_SIZE + 4];
+    size_t        out_used;
+    size_t        out_sent;
+} tlsv2_client_t;
 
 typedef void (*tlsv2_on_client_connected)(int client_id);
 typedef void (*tlsv2_on_client_disconnected)(int client_id);
@@ -33,46 +58,58 @@ typedef struct {
     tlsv2_on_json_received       on_json_received;
 } tlsv2_server_config_t;
 
-typedef enum {
-    TLSV2_STATE_UNUSED = 0,
-    TLSV2_STATE_HANDSHAKE,
-    TLSV2_STATE_OPEN,
-    TLSV2_STATE_CLOSING
-} tlsv2_client_state_t;
-
-struct tlsv2_client_s {
-    int                  fd;
-    SSL                 *ssl;
-    tlsv2_client_state_t state;
-
-    unsigned char in_buf[TLSV2_MAX_JSON_SIZE + 4];
-    size_t        in_used;
-    uint32_t      expected_len;
-
-    unsigned char out_buf[TLSV2_MAX_JSON_SIZE + 4];
-    size_t        out_used;
-    size_t        out_sent;
-};
-
-static SSL_CTX          *g_ctx_server = NULL;
-static int               g_listen_fd  = -1;
-static tlsv2_client_t    g_clients[TLSV2_MAX_CLIENTS];
+static tlsv2_client_t g_clients[TLSV2_MAX_CLIENTS];
 static tlsv2_server_config_t g_cfg;
+static SSL_CTX *g_ctx_server = NULL;
+static int g_listen_fd = -1;
 
+// Forward declarations for server-side helpers
+static void tlsv2_log_ssl_error(const char *msg);
+static int  make_nonblocking(int fd);
+static void tlsv2_clients_init(void);
+static tlsv2_client_t *tlsv2_client_alloc(int fd, SSL *ssl);
+static void tlsv2_client_close(tlsv2_client_t *c);
 // ---------------------------------------------------------
-// Internal helpers
+// Server registry helpers (struct array, NOT pointers)
 // ---------------------------------------------------------
+static void tlsv2_register_client(tlsv2_client_t *c) {
+    // Nothing to do — server clients are stored directly in g_clients[]
+    // Allocation happens in tlsv2_client_alloc()
+}
+
+static tlsv2_client_t *tlsv2_lookup_client(int sock) {
+    for (int i = 0; i < TLSV2_MAX_CLIENTS; i++) {
+        if (g_clients[i].state != TLSV2_STATE_UNUSED &&
+            g_clients[i].fd == sock)
+        {
+            return &g_clients[i];
+        }
+    }
+    return NULL;
+}
+
+static void tlsv2_unregister_client(int sock) {
+    for (int i = 0; i < TLSV2_MAX_CLIENTS; i++) {
+        if (g_clients[i].state != TLSV2_STATE_UNUSED &&
+            g_clients[i].fd == sock)
+        {
+            // Mark as unused — do NOT assign NULL
+            g_clients[i].state = TLSV2_STATE_UNUSED;
+            return;
+        }
+    }
+}
+
+static void tlsv2_log_ssl_error(const char *msg) {
+    fprintf(stderr, "[tlsv2] %s\n", msg);
+    ERR_print_errors_fp(stderr);
+}
 
 static int make_nonblocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0) return -1;
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) return -1;
     return 0;
-}
-
-static void tlsv2_log_ssl_error(const char *msg) {
-    fprintf(stderr, "[tlsv2] %s\n", msg);
-    ERR_print_errors_fp(stderr);
 }
 
 static void tlsv2_clients_init(void) {
@@ -505,4 +542,143 @@ int tlsv2_send_json(int client_id, const char *json, size_t len) {
         }
     }
     return -1;
+}
+// ======================================================
+// CLEAN TLS CLIENT API (blocking, PB-friendly)
+// ======================================================
+
+typedef struct tlsv2_client_conn_s {
+    int   sock;
+    SSL  *ssl;
+} tlsv2_client_conn_t;
+
+#define TLSV2_MAX_CLIENT_CONNS 64
+static tlsv2_client_conn_t *g_client_conns[TLSV2_MAX_CLIENT_CONNS] = {0};
+static SSL_CTX *g_client_ctx = NULL;
+
+// ------------------------------------------------------
+// Registry helpers
+// ------------------------------------------------------
+static void tlsv2_register_client_conn(tlsv2_client_conn_t *c) {
+    for (int i = 0; i < TLSV2_MAX_CLIENT_CONNS; i++) {
+        if (!g_client_conns[i]) {
+            g_client_conns[i] = c;
+            return;
+        }
+    }
+}
+
+static tlsv2_client_conn_t *tlsv2_lookup_client_conn(int sock) {
+    for (int i = 0; i < TLSV2_MAX_CLIENT_CONNS; i++) {
+        if (g_client_conns[i] && g_client_conns[i]->sock == sock)
+            return g_client_conns[i];
+    }
+    return NULL;
+}
+
+static void tlsv2_unregister_client_conn(int sock) {
+    for (int i = 0; i < TLSV2_MAX_CLIENT_CONNS; i++) {
+        if (g_client_conns[i] && g_client_conns[i]->sock == sock) {
+            g_client_conns[i] = NULL;
+            return;
+        }
+    }
+}
+
+// ------------------------------------------------------
+// Init
+// ------------------------------------------------------
+int tlsv2_client_init(void) {
+    SSL_library_init();
+    SSL_load_error_strings();
+    OpenSSL_add_all_algorithms();
+
+    g_client_ctx = SSL_CTX_new(TLS_client_method());
+    return g_client_ctx ? 0 : -1;
+}
+
+// ------------------------------------------------------
+// Connect
+// ------------------------------------------------------
+int tlsv2_client_connect(const char *host, int port) {
+    tlsv2_client_conn_t *c = calloc(1, sizeof(tlsv2_client_conn_t));
+    if (!c) return -1;
+
+    c->sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (c->sock < 0) { free(c); return -1; }
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons(port);
+    inet_pton(AF_INET, host, &addr.sin_addr);
+
+    if (connect(c->sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(c->sock);
+        free(c);
+        return -2;
+    }
+
+    c->ssl = SSL_new(g_client_ctx);
+    SSL_set_fd(c->ssl, c->sock);
+
+    if (SSL_connect(c->ssl) <= 0) {
+        SSL_free(c->ssl);
+        close(c->sock);
+        free(c);
+        return -3;
+    }
+
+    tlsv2_register_client_conn(c);
+    return c->sock;
+}
+
+// ------------------------------------------------------
+// Send JSON (length-prefixed)
+// ------------------------------------------------------
+int tlsv2_client_send_json(int sock, const char *json, size_t len) {
+    tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
+    if (!c) return -1;
+
+    uint32_t nlen = htonl((uint32_t)len);
+    if (SSL_write(c->ssl, &nlen, 4) <= 0) return -2;
+    if (SSL_write(c->ssl, json, len) <= 0) return -3;
+
+    return 0;
+}
+
+// ------------------------------------------------------
+// Receive JSON (blocking)
+// ------------------------------------------------------
+int tlsv2_client_recv_json(int sock, char *buf, size_t maxlen) {
+    tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
+    if (!c) return -1;
+
+    uint32_t nlen;
+    if (SSL_read(c->ssl, &nlen, 4) <= 0)
+        return -2;
+
+    nlen = ntohl(nlen);
+    if (nlen > maxlen)
+        return -3;
+
+    if (SSL_read(c->ssl, buf, nlen) <= 0)
+        return -4;
+
+    return (int)nlen;
+}
+
+// ------------------------------------------------------
+// Close
+// ------------------------------------------------------
+void tlsv2_client_close_fd(int sock) {
+    tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
+    if (!c) return;
+
+    SSL_shutdown(c->ssl);
+    SSL_free(c->ssl);
+    close(c->sock);
+
+    tlsv2_unregister_client_conn(sock);
+    free(c);
 }
