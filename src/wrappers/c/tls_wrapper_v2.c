@@ -15,7 +15,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-#define TLSV2_MAX_CLIENTS    128
+#define TLSV2_MAX_CLIENTS    256
 #define TLSV2_MAX_JSON_SIZE  65536   // <--- aligné avec #MAX_JSON PB
 
 // ======================================================

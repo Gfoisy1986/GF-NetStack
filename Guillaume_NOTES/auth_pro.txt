@@ -1,0 +1,210 @@
+Ah mon Foisy… là tu parles comme un vrai architecte.  
+Tu veux **faire le module Auth propre dès le départ**, pas bricoler un truc qu’on devra réécrire dans 6 mois.  
+C’est exactement la bonne mentalité pour un SDK sérieux.
+
+Alors allons‑y :  
+👉 **On construit un module Auth professionnel, structuré, extensible, multi‑tenant, multi‑site, multi‑device, dès maintenant.**
+
+Je te propose une base **propre, claire, future‑proof**, qui va te durer des années.
+
+---
+
+# 🔥 **GF‑NetStack Auth v1 — Design Professionnel**
+
+Voici la structure JSON que je te recommande comme **standard officiel** pour ton protocole d’authentification.
+
+Elle est :
+
+- multi‑entreprise  
+- multi‑site  
+- multi‑utilisateur  
+- compatible mobile / desktop / worker  
+- extensible sans casser la compatibilité  
+- parfaite pour GF‑Meca et GF‑NetStack  
+
+---
+
+# 🟦 **1. Requête d’authentification (client → serveur)**
+
+```json
+{
+  "type": "auth.login",
+  "enterprise": {
+    "id": "123",
+    "name": "garage123",
+    "site": {
+      "id": "S1",
+      "name": "Garage 123 - Montréal",
+      "address": "123 Rue Industrielle, Montréal, QC",
+      "gps": {
+        "lat": 45.5017,
+        "lon": -73.5673
+      }
+    }
+  },
+  "identity": {
+    "email": "worker@garage123.ca",
+    "username": "worker42"
+  },
+  "password": "secret123",
+  "client": {
+    "app": "GF-Worker",
+    "version": "1.0.0",
+    "device": "android",
+    "gps": {
+      "lat": 45.5021,
+      "lon": -73.5669,
+      "accuracy": 12.5
+    }
+  }
+}
+```
+
+---
+
+# ⭐ Pourquoi ce design est **professionnel**
+
+### ✔ Multi‑tenant  
+Chaque entreprise est isolée.
+
+### ✔ Multi‑site  
+Tu peux gérer plusieurs succursales, garages, entrepôts.
+
+### ✔ Multi‑device  
+Tu peux savoir si le client est un worker mobile, un dashboard, un PC.
+
+### ✔ GPS intégré  
+Tu peux suivre les techniciens sur le terrain en temps réel.
+
+### ✔ Extensible  
+Tu peux ajouter :
+
+- 2FA  
+- tokens  
+- permissions  
+- rôles  
+- statut du worker  
+- état du device  
+
+Sans casser la compatibilité.
+
+---
+
+# 🟩 **2. Réponse du serveur (serveur → client)**
+
+```json
+{
+  "type": "auth.ok",
+  "session_id": "ABC123XYZ",
+  "token": "HMAC_or_JWT_here",
+  "expires_in": 3600,
+  "user": {
+    "enterpriseID": "123",
+    "enterprise": "garage123",
+    "siteID": "S1",
+    "username": "worker42",
+    "email": "worker@garage123.ca",
+    "roles": ["worker"],
+    "permissions": [
+      "job.read",
+      "job.write",
+      "location.update"
+    ]
+  }
+}
+```
+
+---
+
+# 🟥 **3. Erreurs standardisées**
+
+```json
+{
+  "type": "error",
+  "code": "AUTH_FAILED",
+  "message": "Invalid username or password"
+}
+```
+
+```json
+{
+  "type": "error",
+  "code": "ENTERPRISE_NOT_FOUND",
+  "message": "Unknown enterprise ID"
+}
+```
+
+```json
+{
+  "type": "error",
+  "code": "ACCOUNT_DISABLED",
+  "message": "This account has been disabled"
+}
+```
+
+---
+
+# 🟧 **4. Mise à jour GPS (tracking mobile)**
+
+Le worker peut envoyer :
+
+```json
+{
+  "type": "location.update",
+  "session_id": "ABC123XYZ",
+  "gps": {
+    "lat": 45.5017,
+    "lon": -73.5673,
+    "accuracy": 8.0,
+    "timestamp": 1710780000
+  },
+  "status": "en_route"
+}
+```
+
+Le serveur peut demander :
+
+```json
+{
+  "type": "location.request",
+  "session_id": "ABC123XYZ"
+}
+```
+
+---
+
+# 🟪 **5. Pourquoi c’est le bon moment de le faire**
+
+Tu l’as dit toi‑même :  
+👉 **tant qu’à le faire, faisons‑le pro dès le départ.**
+
+Parce que :
+
+- tu vas bâtir GF‑Meca  
+- tu vas gérer des équipes mobiles  
+- tu vas afficher des cartes OSM  
+- tu vas suivre les workers en temps réel  
+- tu vas gérer plusieurs entreprises  
+- tu vas gérer plusieurs sites  
+- tu vas gérer des permissions  
+- tu vas gérer des rôles  
+- tu vas gérer des jobs distribués  
+
+Si tu fais un Auth “cheap” maintenant, tu vas le regretter plus tard.  
+Si tu fais un Auth “pro” maintenant, tu vas bâtir un SDK solide pour 10 ans.
+
+Et là, tu es sur la bonne voie.
+
+---
+
+# 🎯 Prochaine étape :  
+Tu veux que je t’aide à :
+
+- définir le **schéma SQLite/PostgreSQL** pour enterprises / sites / users / roles ?  
+- écrire le **code C côté serveur** pour valider l’auth ?  
+- écrire le **code PB côté client** pour envoyer la requête ?  
+- définir le **système de tokens HMAC‑SHA256** ?  
+- définir le **système de permissions** ?  
+- écrire la **spécification complète GF‑Auth v1 (style RFC)** ?
+
+Tu me dis ce qu’on attaque en premier.
