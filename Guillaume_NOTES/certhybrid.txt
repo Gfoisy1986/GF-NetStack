@@ -1,0 +1,115 @@
+Pas du tout — et c’est ça qui est beau : **la méthode hybride a l’air “pro” sur papier, mais en pratique elle est étonnamment simple à implémenter**.  
+Tu vas voir, ce n’est pas un monstre. C’est même plus simple que de maintenir un bundle complet.
+
+Je te fais un tour clair, concret, sans blabla.
+
+---
+
+# 🧩 **Pourquoi ce n’est pas dur**
+Parce que tu n’as que **deux blocs** à coder :
+
+## 1) Charger ton bundle CA minimal  
+Ça, tu le fais déjà :
+
+```c
+mbedtls_x509_crt_parse_file(&cacert, "certs/ca_minimal.pem");
+```
+
+Rien à changer.
+
+## 2) Ajouter une fonction optionnelle pour charger les CA système  
+Et là, c’est *beaucoup* plus simple que tu penses.
+
+---
+
+# 🖥️ **Linux (le plus simple)**
+Tu charges simplement le dossier système :
+
+```c
+mbedtls_x509_crt_parse_path(&cacert, "/etc/ssl/certs");
+```
+
+C’est tout.
+
+---
+
+# 🪟 **Windows (un peu plus de code, mais rien de sorcier)**
+Tu utilises l’API WinCrypt :
+
+- Ouvrir le store `ROOT`
+- Parcourir les certificats
+- Les injecter dans mbedTLS
+
+Exemple simplifié :
+
+```c
+HCERTSTORE hStore = CertOpenSystemStoreA(0, "ROOT");
+PCCERT_CONTEXT ctx = NULL;
+
+while ((ctx = CertEnumCertificatesInStore(hStore, ctx)) != NULL) {
+    mbedtls_x509_crt_parse(&cacert, ctx->pbCertEncoded, ctx->cbCertEncoded);
+}
+
+CertCloseStore(hStore, 0);
+```
+
+C’est littéralement ça.
+
+---
+
+# 🍏 **macOS (Keychain)**
+Tu utilises `SecTrustCopyAnchorCertificates` :
+
+```c
+CFArrayRef anchors = NULL;
+SecTrustCopyAnchorCertificates(&anchors);
+
+for (...) {
+    // Convertir chaque certificat en DER
+    // Appeler mbedtls_x509_crt_parse()
+}
+```
+
+C’est un peu verbeux, mais pas compliqué.
+
+---
+
+# 🧠 **En résumé**
+| Plateforme | Complexité | Pourquoi |
+|-----------|------------|----------|
+| Linux | ⭐ Très facile | Une seule ligne |
+| Windows | ⭐⭐ Moyen | API WinCrypt, mais stable et simple |
+| macOS | ⭐⭐ Moyen | API Keychain, un peu verbeuse |
+
+**Aucune plateforme n’est “dure”.**  
+C’est juste du plumbing.
+
+---
+
+# 🥇 **Pourquoi c’est la meilleure approche malgré tout**
+Parce que tu obtiens :
+
+- Un SDK léger  
+- Un SDK légalement clean  
+- Un SDK robuste  
+- Un SDK multiplateforme  
+- Un SDK qui “just works” pour 99 % des cas  
+
+Et surtout :  
+👉 **Tu n’as pas à maintenir un bundle CA complet.**
+
+---
+
+# 🎁 Bonus : ce que je peux faire pour toi
+Si tu veux, je peux te générer :
+
+- Le code complet pour les trois plateformes  
+- Une API propre pour GF NetStack :  
+  ```c
+  GF_TLS_LoadMinimalCA();
+  GF_TLS_LoadSystemCA();
+  ```
+- La structure de dossier idéale  
+- Le bundle minimal recommandé (Let’s Encrypt + DigiCert + GlobalSign + Sectigo)
+
+Tu me dis ce que tu veux, et je te prépare ça proprement.
