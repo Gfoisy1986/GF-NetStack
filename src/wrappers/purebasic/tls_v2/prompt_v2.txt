@@ -1,0 +1,112 @@
+Here’s a PureBasic FFI version of your C example, set up to work across Windows/Linux/macOS and call into a compiled `tls_v2` library.
+
+```purebasic
+; tls_v2.pbi – PureBasic FFI wrapper for tls_v2.c (server side)
+
+EnableExplicit
+
+;-------------------------------------------------------
+; Platform-specific library name
+;-------------------------------------------------------
+CompilerSelect #PB_Compiler_OS
+  Case #PB_OS_Windows
+    #TLSV2_Lib = "tls_v2.dll"
+  Case #PB_OS_Linux
+    #TLSV2_Lib = "libtls_v2.so"
+  Case #PB_OS_MacOS
+    #TLSV2_Lib = "libtls_v2.dylib"
+CompilerEndSelect
+
+;-------------------------------------------------------
+; C callback prototypes
+;-------------------------------------------------------
+PrototypeC tlsv2_on_client_connected(id.l)
+PrototypeC tlsv2_on_client_disconnected(id.l)
+PrototypeC tlsv2_on_json_received(id.l, *json, len.i)
+
+;-------------------------------------------------------
+; C struct: tlsv2_server_config_t
+;   int  port;
+;   const char *cert_file;
+;   const char *key_file;
+;   tlsv2_on_client_connected    on_client_connected;
+;   tlsv2_on_client_disconnected on_client_disconnected;
+;   tlsv2_on_json_received       on_json_received;
+;-------------------------------------------------------
+Structure tlsv2_server_config_t
+  port.l
+  cert_file.i
+  key_file.i
+  on_client_connected.tlsv2_on_client_connected
+  on_client_disconnected.tlsv2_on_client_disconnected
+  on_json_received.tlsv2_on_json_received
+EndStructure
+
+;-------------------------------------------------------
+; Imported C functions
+;-------------------------------------------------------
+ImportC #TLSV2_Lib
+  tlsv2_server_run(*cfg.tlsv2_server_config_t) As "_tlsv2_server_run"
+  tlsv2_send_json(id.l, *json, len.i)          As "_tlsv2_send_json"
+EndImport
+
+;-------------------------------------------------------
+; PureBasic callbacks (C calling convention)
+;-------------------------------------------------------
+ProcedureC on_connect(id.l)
+  Debug "Client connected: " + Str(id)
+EndProcedure
+
+ProcedureC on_disconnect(id.l)
+  Debug "Client disconnected: " + Str(id)
+EndProcedure
+
+ProcedureC on_json(id.l, *json, len.i)
+  Protected msg$ = PeekS(*json, len, #PB_Ascii)
+  Debug "From " + Str(id) + ": " + msg$
+  ; Echo back
+  tlsv2_send_json(id, *json, len)
+EndProcedure
+
+;-------------------------------------------------------
+; Helper: make C-style ASCII string
+;-------------------------------------------------------
+Procedure.i MakeCStringAscii(text$)
+  Protected *mem, len.i
+  len = StringByteLength(text$, #PB_Ascii)
+  *mem = AllocateMemory(len + 1)
+  If *mem
+    PokeS(*mem, text$, -1, #PB_Ascii)
+  EndIf
+  ProcedureReturn *mem
+EndProcedure
+
+;-------------------------------------------------------
+; Main – equivalent to your C main()
+;-------------------------------------------------------
+Define cfg.tlsv2_server_config_t
+Define *cert, *key
+
+*cert = MakeCStringAscii("server.pem")
+*key  = MakeCStringAscii("server.key")
+
+cfg\port                  = 8443
+cfg\cert_file             = *cert
+cfg\key_file              = *key
+cfg\on_client_connected   = @on_connect()
+cfg\on_client_disconnected= @on_disconnect()
+cfg\on_json_received      = @on_json()
+
+; Blocking server loop (like C main)
+tlsv2_server_run(@cfg)
+
+; Cleanup (won’t be reached unless server_run returns)
+If *cert : FreeMemory(*cert) : EndIf
+If *key  : FreeMemory(*key)  : EndIf
+```
+
+You just need to:
+
+- Compile `tls_v2.c` into a shared library (`tls_v2.dll` / `libtls_v2.so` / `libtls_v2.dylib`).
+- Make sure the exported names match (`tlsv2_server_run`, `tlsv2_send_json`; adjust `As "_name"` if your compiler decorates differently).
+- Include this `.pbi` in your PB project and run—this mirrors your C example, with callbacks and echo behavior.
