@@ -16,13 +16,5 @@
 
 
 
-# Optional: hide scripting languages from stats
-
-*.sh  linguist-vendored
-*.ps1 linguist-vendored
-*.bat linguist-vendored
-*.c   linguist-vendored
-
-
 # Keep Git behavior normal
 * text=auto
