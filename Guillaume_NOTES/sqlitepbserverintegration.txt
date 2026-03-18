@@ -1,0 +1,191 @@
+Alright Foisy — let’s wire your **SQLite C wrapper** directly into your **PureBasic TLS server**, so the server can:
+
+- receive a JSON request  
+- detect `"type":"table"` or `"cmd":"SQL"`  
+- run the SQL query using your new SQLite wrapper  
+- return the result as a JSON table  
+- all inside your existing PB callback system  
+
+This is the cleanest, most SDK‑friendly integration you can get.
+
+Below is the **PureBasic server template updated to call your SQLite wrapper**.
+
+---
+
+# 🧩 **1. PureBasic → C function bindings for SQLite wrapper**
+
+Add this at the top of your PB server file, right after `EnableExplicit`.
+
+```purebasic
+; ============================================================
+;  SQLite Wrapper C Bindings
+; ============================================================
+
+ImportC "sqlite_wrapper.o"   ; or .dll / .so / .dylib depending on platform
+
+  dbw_open(path.p-ascii) As "_dbw_open"             ; returns handle.i
+  dbw_close(handle.i) As "_dbw_close"
+
+  dbw_exec_ok(handle.i, sql.p-ascii) As "_dbw_exec_ok"
+
+  dbw_exec_json(handle.i, sql.p-ascii, *jsonOut.i) As "_dbw_exec_json"
+  dbw_free_json(*json.i) As "_dbw_free_json"
+
+  dbw_exec_scalar(handle.i, sql.p-ascii, buf.p-ascii, bufsize.i) As "_dbw_exec_scalar"
+
+EndImport
+```
+
+✔ PB uses `.i` for pointers  
+✔ `.p-ascii` ensures null‑terminated C strings  
+✔ Works on Windows/Linux/macOS with the right library name  
+
+---
+
+# 🧩 **2. Open the SQLite DB when the server starts**
+
+Add this before calling `tlsv2_server_run(cfg)`:
+
+```purebasic
+Global DBHandle.i
+
+DBHandle = dbw_open("mydb.sqlite")
+If DBHandle < 0
+  Debug "SQLite open failed!"
+  End
+EndIf
+
+Debug "SQLite DB opened with handle: " + Str(DBHandle)
+```
+
+---
+
+# 🧩 **3. Modify the PB JSON callback to detect SQL requests**
+
+Inside your existing:
+
+```purebasic
+ProcedureC OnJSONReceived(clientID.i, *json, jsonLen.i)
+```
+
+Replace the `"type":"table"` block with this upgraded version:
+
+```purebasic
+ElseIf FindString(msg, ~"\"type\":\"table\"", 1)
+  Debug "-> TABLE / SQL request"
+
+  ; Extract SQL from JSON (simple pattern match)
+  Protected sql.s = ""
+
+  ; Example expected JSON:
+  ; {"type":"table","cmd":"SQL","data":{"sql":"SELECT * FROM users"}}
+
+  Protected pos.i = FindString(msg, ~"\"sql\":\"", 1)
+  If pos
+    pos + 7
+    Protected endPos.i = FindString(msg, "\"", pos)
+    If endPos > pos
+      sql = Mid(msg, pos, endPos-pos)
+    EndIf
+  EndIf
+
+  If sql = ""
+    Debug "No SQL found in JSON"
+    ProcedureReturn
+  EndIf
+
+  Debug "Executing SQL: " + sql
+
+  ; Call SQLite wrapper
+  Protected *jsonOut.i = 0
+  Protected rc.i = dbw_exec_json(DBHandle, sql, @*jsonOut)
+
+  If rc = 0 And *jsonOut
+    ; Convert C char* → PB string
+    Protected reply.s = PeekS(*jsonOut, -1, #PB_UTF8)
+
+    ; Wrap into your protocol envelope
+    Protected final.s = ~"{\"type\":\"table\",\"cmd\":\"SQL_RESULT\",\"data\":" + reply + "}"
+
+    tlsv2_send_json(clientID, final, StringByteLength(final, #PB_UTF8))
+
+    dbw_free_json(*jsonOut)
+  Else
+    Debug "SQLite error rc=" + Str(rc)
+    Protected err.s = ~"{\"type\":\"error\",\"data\":\"SQLite error\"}"
+    tlsv2_send_json(clientID, err, StringByteLength(err, #PB_UTF8))
+  EndIf
+```
+
+✔ Extracts SQL from JSON  
+✔ Executes SQL via your C wrapper  
+✔ Returns JSON table  
+✔ Uses your TLS protocol  
+
+---
+
+# 🧩 **4. Close the DB when server shuts down**
+
+After `tlsv2_server_run(cfg)` returns:
+
+```purebasic
+dbw_close(DBHandle)
+Debug "SQLite DB closed."
+```
+
+---
+
+# 🧨 **5. Example client request**
+
+Your PB or Fortran client can now send:
+
+```json
+{
+  "type": "table",
+  "cmd": "SQL",
+  "data": {
+    "sql": "SELECT id, name FROM users"
+  }
+}
+```
+
+And the server will respond with:
+
+```json
+{
+  "type": "table",
+  "cmd": "SQL_RESULT",
+  "data": {
+    "columns": ["id","name"],
+    "rows": [
+      ["1","Alice"],
+      ["2","Bob"]
+    ]
+  }
+}
+```
+
+---
+
+# 🎯 You now have:
+
+### ✔ TLS server  
+### ✔ JSON protocol  
+### ✔ SQLite engine  
+### ✔ PureBasic integration  
+### ✔ Cross‑platform C core  
+### ✔ Language‑agnostic DB access  
+
+This is exactly the kind of architecture that makes your SDK feel **professional, modern, and future‑proof**.
+
+---
+
+If you want next:
+
+- **Fortran95 SQLite module**  
+- **Lua SQLite module**  
+- **PB SQL helper module**  
+- **TLS server auto‑routing for SQL commands**  
+- **Prepared statement support**  
+
+Just tell me and I’ll craft it.

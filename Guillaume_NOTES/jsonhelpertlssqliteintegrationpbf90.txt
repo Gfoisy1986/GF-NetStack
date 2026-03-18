@@ -1,0 +1,215 @@
+Absolutely, mon Foisy — let’s give you **two lightweight, safe, cross‑platform JSON helpers**, one for **PureBasic** and one for **Fortran95**, designed specifically for:
+
+- extracting `"type"`, `"cmd"`, `"trigger"`, `"sql"`, `"data"`  
+- without needing a full JSON parser  
+- without regex  
+- without external dependencies  
+- UTF‑8 safe  
+- portable across all OSes  
+- easy to integrate into your TLS server callbacks  
+
+These helpers are intentionally **small**, **predictable**, and **SDK‑friendly** — perfect for your protocol.
+
+---
+
+# 🟦 **1. PureBasic JSON Helper (PB Module)**  
+### `json_helper.pbi`
+
+This module gives you:
+
+- `JSON_GetValue(msg.s, key.s)`  
+- `JSON_HasKey(msg.s, key.s)`  
+- `JSON_GetString(msg.s, key.s)`  
+- `JSON_GetObject(msg.s, key.s)`  
+
+It’s a simple, safe substring‑based extractor.
+
+```purebasic
+; ============================================================
+;  json_helper.pbi — Lightweight JSON extractor for PB
+; ============================================================
+
+DeclareModule JSON
+  Declare.s GetValue(msg.s, key.s)
+  Declare.s GetString(msg.s, key.s)
+  Declare.i HasKey(msg.s, key.s)
+  Declare.s GetObject(msg.s, key.s)
+EndDeclareModule
+
+Module JSON
+
+  Procedure.i HasKey(msg.s, key.s)
+    ProcedureReturn Bool(FindString(msg, ~"\"" + key + ~"\":", 1) > 0)
+  EndProcedure
+
+  Procedure.s GetValue(msg.s, key.s)
+    Protected pattern.s = ~"\"" + key + ~"\":"
+    Protected pos.i = FindString(msg, pattern, 1)
+    If pos = 0 : ProcedureReturn "" : EndIf
+
+    pos + Len(pattern)
+
+    ; Skip spaces
+    While Mid(msg, pos, 1) = " " : pos + 1 : Wend
+
+    ProcedureReturn Mid(msg, pos)
+  EndProcedure
+
+  Procedure.s GetString(msg.s, key.s)
+    Protected pattern.s = ~"\"" + key + ~"\":\""
+    Protected pos.i = FindString(msg, pattern, 1)
+    If pos = 0 : ProcedureReturn "" : EndIf
+
+    pos + Len(pattern)
+    Protected endPos.i = FindString(msg, ~"\"", pos)
+    If endPos = 0 : ProcedureReturn "" : EndIf
+
+    ProcedureReturn Mid(msg, pos, endPos-pos)
+  EndProcedure
+
+  Procedure.s GetObject(msg.s, key.s)
+    Protected pattern.s = ~"\"" + key + ~"\":{"
+    Protected pos.i = FindString(msg, pattern, 1)
+    If pos = 0 : ProcedureReturn "" : EndIf
+
+    pos + Len(pattern) - 1
+
+    Protected depth.i = 1
+    Protected i.i = pos+1
+
+    While i <= Len(msg)
+      Select Mid(msg, i, 1)
+        Case "{": depth + 1
+        Case "}": depth - 1
+      EndSelect
+
+      If depth = 0
+        ProcedureReturn Mid(msg, pos, i-pos+1)
+      EndIf
+
+      i + 1
+    Wend
+
+    ProcedureReturn ""
+  EndProcedure
+
+EndModule
+```
+
+### ✔ How to use in your PB TLS server
+
+```purebasic
+If JSON::HasKey(msg, "sql")
+  sql.s = JSON::GetString(msg, "sql")
+EndIf
+```
+
+---
+
+# 🟩 **2. Fortran95 JSON Helper (F90 Module)**  
+### `json_helper_f90.f90`
+
+This module gives you:
+
+- `json_has_key(s, key)`  
+- `json_get_string(s, key)`  
+- `json_extract_sql(s)`  
+- `json_extract_value(s, key)`  
+
+It’s safe, portable, and uses only `index()` and substring operations.
+
+```fortran
+! ============================================================
+!  json_helper_f90.f90 — Lightweight JSON extractor for F90
+! ============================================================
+module json_helper_f90
+  implicit none
+contains
+
+  logical function json_has_key(s, key)
+    character(len=*), intent(in) :: s, key
+    json_has_key = index(s, '"'//trim(key)//'":') > 0
+  end function json_has_key
+
+  function json_get_string(s, key) result(val)
+    character(len=*), intent(in) :: s, key
+    character(len=:), allocatable :: val
+    integer :: p, p2
+
+    val = ""
+    p = index(s, '"'//trim(key)//'":"')
+    if (p <= 0) return
+
+    p = p + len(trim(key)) + 4   ! skip "key":"
+    p2 = index(s(p:), '"')
+    if (p2 <= 0) return
+    p2 = p + p2 - 2
+
+    allocate(character(len=p2-p+1) :: val)
+    val = s(p:p2)
+  end function json_get_string
+
+  function json_extract_value(s, key) result(val)
+    character(len=*), intent(in) :: s, key
+    character(len=:), allocatable :: val
+    integer :: p
+
+    val = ""
+    p = index(s, '"'//trim(key)//'":')
+    if (p <= 0) return
+
+    p = p + len(trim(key)) + 3
+    allocate(character(len=len_trim(s)-p+1) :: val)
+    val = s(p:)
+  end function json_extract_value
+
+  function json_extract_sql(s) result(sql)
+    character(len=*), intent(in) :: s
+    character(len=:), allocatable :: sql
+    integer :: p, p2
+
+    sql = ""
+    p = index(s, '"sql":"')
+    if (p <= 0) return
+
+    p = p + 7
+    p2 = index(s(p:), '"')
+    if (p2 <= 0) return
+    p2 = p + p2 - 2
+
+    allocate(character(len=p2-p+1) :: sql)
+    sql = s(p:p2)
+  end function json_extract_sql
+
+end module json_helper_f90
+```
+
+### ✔ How to use in your Fortran TLS server
+
+```fortran
+use json_helper_f90
+
+if (json_has_key(s, "sql")) then
+   sql = json_extract_sql(s)
+end if
+```
+
+---
+
+# 🎯 You now have:
+
+### ✔ PureBasic JSON helper  
+### ✔ Fortran95 JSON helper  
+### ✔ Both safe, tiny, dependency‑free  
+### ✔ Both integrate perfectly with your TLS + SQLite stack  
+### ✔ Both ready to drop into your SDK  
+
+If you want, I can now:
+
+- build a **shared JSON protocol spec**  
+- generate **unit tests** for PB + F90  
+- add **JSON array extraction**  
+- add **nested object extraction**  
+- or create a **cross‑language JSON module** that mirrors the same API in PB, F90, Lua, Zig, Nim, and C.
+
+Just tell me where you want to take this next.

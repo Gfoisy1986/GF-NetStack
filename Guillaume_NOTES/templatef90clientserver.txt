@@ -1,0 +1,361 @@
+Here we go Foisy—Fortran95 style, clean, `iso_c_binding`, and ready to sit on top of your `tls_wrapper_v2.c`.
+
+I’ll give you **two separate templates**:
+
+- `tlsv2_client_f90.f90`  
+- `tlsv2_server_f90.f90`  
+
+You can later refactor them into modules/files as you like.
+
+---
+
+### `tlsv2_client_f90.f90` — Fortran95 TLS JSON client template
+
+```fortran
+! ============================================================
+!  tlsv2_client_f90.f90
+!  Fortran95 TLSv2 JSON client (works with tls_wrapper_v2.c)
+! ============================================================
+program tlsv2_client_demo
+  use iso_c_binding
+  implicit none
+
+  interface
+     function tlsv2_client_init() bind(C, name="tlsv2_client_init")
+       import :: c_int
+       integer(c_int) :: tlsv2_client_init
+     end function
+
+     function tlsv2_client_connect(host, port) bind(C, name="tlsv2_client_connect")
+       import :: c_int, c_char
+       character(kind=c_char), dimension(*) :: host
+       integer(c_int), value :: port
+       integer(c_int) :: tlsv2_client_connect
+     end function
+
+     function tlsv2_client_send_json(sock, json, len) bind(C, name="tlsv2_client_send_json")
+       import :: c_int, c_char, c_size_t
+       integer(c_int), value :: sock
+       character(kind=c_char), dimension(*) :: json
+       integer(c_size_t), value :: len
+       integer(c_int) :: tlsv2_client_send_json
+     end function
+
+     function tlsv2_client_recv_json(sock, buf, maxlen) bind(C, name="tlsv2_client_recv_json")
+       import :: c_int, c_char, c_size_t
+       integer(c_int), value :: sock
+       character(kind=c_char), dimension(*) :: buf
+       integer(c_size_t), value :: maxlen
+       integer(c_int) :: tlsv2_client_recv_json
+     end function
+
+     subroutine tlsv2_client_close_fd(sock) bind(C, name="tlsv2_client_close_fd")
+       import :: c_int
+       integer(c_int), value :: sock
+     end subroutine
+  end interface
+
+  integer(c_int) :: rc, sock, n
+  integer(c_size_t), parameter :: MAX_JSON = 65536_c_size_t
+  character(kind=c_char), dimension(0:MAX_JSON-1) :: buf
+  character(len=1024) :: fmsg
+  integer :: i
+
+  ! ---------------------------------------------------------
+  ! Init
+  ! ---------------------------------------------------------
+  rc = tlsv2_client_init()
+  if (rc /= 0_c_int) then
+     print *, "TLS init failed"
+     stop
+  end if
+
+  ! "127.0.0.1" as C string
+  buf = c_null_char
+  buf(0) = '1'
+  buf(1) = '2'
+  buf(2) = '7'
+  buf(3) = '.'
+  buf(4) = '0'
+  buf(5) = '.'
+  buf(6) = '0'
+  buf(7) = '.'
+  buf(8) = '1'
+  buf(9) = c_null_char
+
+  sock = tlsv2_client_connect(buf, 8443_c_int)
+  if (sock < 0_c_int) then
+     print *, "Connection failed"
+     stop
+  end if
+
+  print *, "Connected!"
+
+  ! ---------------------------------------------------------
+  ! Send a simple text JSON
+  ! ---------------------------------------------------------
+  fmsg = '{"type":"text","data":"Hello from Fortran!"}'
+  call send_json(sock, trim(fmsg))
+
+  ! Send a command
+  fmsg = '{"type":"command","trigger":"userAction","cmd":"PING"}'
+  call send_json(sock, trim(fmsg))
+
+  ! Request a table
+  fmsg = '{"type":"table","trigger":"dbQuery","cmd":"SELECT_ALL","data":{"table":"users"}}'
+  call send_json(sock, trim(fmsg))
+
+  ! ---------------------------------------------------------
+  ! Receive loop (simple demo)
+  ! ---------------------------------------------------------
+  do
+     buf = c_null_char
+     n = tlsv2_client_recv_json(sock, buf, MAX_JSON)
+     if (n <= 0_c_int) then
+        print *, "Server closed connection"
+        exit
+     end if
+
+     call print_c_string(buf, n)
+  end do
+
+  call tlsv2_client_close_fd(sock)
+  print *, "Disconnected."
+
+contains
+
+  subroutine send_json(sock, msg)
+    integer(c_int), value :: sock
+    character(len=*), intent(in) :: msg
+    character(kind=c_char), allocatable, dimension(:) :: cmsg
+    integer(c_size_t) :: len
+    integer :: i
+    integer(c_int) :: rc
+
+    len = len_trim(msg)
+    allocate(cmsg(0:len))
+    do i = 1, len
+       cmsg(i-1) = transfer(msg(i:i), cmsg(0))
+    end do
+    cmsg(len) = c_null_char
+
+    rc = tlsv2_client_send_json(sock, cmsg, len)
+    if (rc /= 0_c_int) then
+       print *, "send_json error rc=", rc
+    end if
+
+    deallocate(cmsg)
+  end subroutine send_json
+
+  subroutine print_c_string(cbuf, n)
+    character(kind=c_char), dimension(*), intent(in) :: cbuf
+    integer(c_int), value :: n
+    integer :: i
+    character(len=:), allocatable :: s
+
+    allocate(character(len=n) :: s)
+    do i = 1, n
+       s(i:i) = transfer(cbuf(i-1), s(1:1))
+    end do
+    print *, "Received JSON: ", trim(s)
+    deallocate(s)
+  end subroutine print_c_string
+
+end program tlsv2_client_demo
+```
+
+---
+
+### `tlsv2_server_f90.f90` — Fortran95 TLS JSON server template
+
+This assumes you expose `tlsv2_server_run` and the `tlsv2_server_config_t` struct from C.
+
+```fortran
+! ============================================================
+!  tlsv2_server_f90.f90
+!  Fortran95 TLSv2 JSON server (callbacks + JSON)
+! ============================================================
+module tlsv2_server_mod
+  use iso_c_binding
+  implicit none
+
+  type, bind(C) :: tlsv2_server_config_t
+     integer(c_int) :: port
+     type(c_ptr)    :: cert_file
+     type(c_ptr)    :: key_file
+     type(c_funptr) :: on_client_connected
+     type(c_funptr) :: on_client_disconnected
+     type(c_funptr) :: on_json_received
+  end type tlsv2_server_config_t
+
+  interface
+     subroutine tlsv2_server_run(cfg) bind(C, name="tlsv2_server_run")
+       import :: tlsv2_server_config_t
+       type(tlsv2_server_config_t), value :: cfg
+     end subroutine
+
+     function tlsv2_send_json(client_id, json, len) bind(C, name="tlsv2_send_json")
+       import :: c_int, c_char, c_size_t
+       integer(c_int), value :: client_id
+       character(kind=c_char), dimension(*) :: json
+       integer(c_size_t), value :: len
+       integer(c_int) :: tlsv2_send_json
+     end function
+  end interface
+
+contains
+
+  subroutine on_client_connected_c(client_id) bind(C, name="on_client_connected_f")
+    use iso_c_binding
+    integer(c_int), value :: client_id
+    print *, ">>> Client connected:", client_id
+  end subroutine
+
+  subroutine on_client_disconnected_c(client_id) bind(C, name="on_client_disconnected_f")
+    use iso_c_binding
+    integer(c_int), value :: client_id
+    print *, "<<< Client disconnected:", client_id
+  end subroutine
+
+  subroutine on_json_received_c(client_id, json, len) bind(C, name="on_json_received_f")
+    use iso_c_binding
+    integer(c_int), value :: client_id
+    character(kind=c_char), dimension(*) :: json
+    integer(c_size_t), value :: len
+
+    character(len=:), allocatable :: s
+    integer :: i
+    integer(c_int) :: rc
+
+    allocate(character(len=len) :: s)
+    do i = 1, len
+       s(i:i) = transfer(json(i-1), s(1:1))
+    end do
+
+    print *, "----------------------------------------"
+    print *, "From client", client_id, ": ", trim(s)
+
+    ! Very simple dispatch
+    if (index(s, '"type":"text"') > 0) then
+       call send_text_reply(client_id, 'Fortran server received your text')
+    else if (index(s, '"type":"command"') > 0) then
+       if (index(s, '"cmd":"PING"') > 0) then
+          call send_command_reply(client_id, 'PONG')
+       end if
+    else if (index(s, '"type":"table"') > 0) then
+       call send_fake_table(client_id)
+    end if
+
+    deallocate(s)
+  end subroutine on_json_received_c
+
+  subroutine send_text_reply(client_id, msg)
+    integer(c_int), value :: client_id
+    character(len=*), intent(in) :: msg
+    character(len=:), allocatable :: json
+    character(kind=c_char), allocatable, dimension(:) :: cjson
+    integer(c_size_t) :: len
+    integer :: i
+    integer(c_int) :: rc
+
+    json = '{"type":"text","data":"'//trim(msg)//'"}'
+    len = len_trim(json)
+    allocate(cjson(0:len))
+    do i = 1, len
+       cjson(i-1) = transfer(json(i:i), cjson(0))
+    end do
+    cjson(len) = c_null_char
+
+    rc = tlsv2_send_json(client_id, cjson, len)
+    if (rc /= 0_c_int) print *, "send_text_reply error rc=", rc
+
+    deallocate(cjson)
+  end subroutine send_text_reply
+
+  subroutine send_command_reply(client_id, cmd)
+    integer(c_int), value :: client_id
+    character(len=*), intent(in) :: cmd
+    character(len=:), allocatable :: json
+    character(kind=c_char), allocatable, dimension(:) :: cjson
+    integer(c_size_t) :: len
+    integer :: i
+    integer(c_int) :: rc
+
+    json = '{"type":"command","cmd":"'//trim(cmd)//'"}'
+    len = len_trim(json)
+    allocate(cjson(0:len))
+    do i = 1, len
+       cjson(i-1) = transfer(json(i:i), cjson(0))
+    end do
+    cjson(len) = c_null_char
+
+    rc = tlsv2_send_json(client_id, cjson, len)
+    if (rc /= 0_c_int) print *, "send_command_reply error rc=", rc
+
+    deallocate(cjson)
+  end subroutine send_command_reply
+
+  subroutine send_fake_table(client_id)
+    integer(c_int), value :: client_id
+    character(len=:), allocatable :: json
+    character(kind=c_char), allocatable, dimension(:) :: cjson
+    integer(c_size_t) :: len
+    integer :: i
+    integer(c_int) :: rc
+
+    json = '{"type":"table","cmd":"SELECT_ALL_RESULT","data":{"table":"users","columns":["id","name"],"rows":[[1,""Alice""],[2,""Bob""]]}}'
+    len = len_trim(json)
+    allocate(cjson(0:len))
+    do i = 1, len
+       cjson(i-1) = transfer(json(i:i), cjson(0))
+    end do
+    cjson(len) = c_null_char
+
+    rc = tlsv2_send_json(client_id, cjson, len)
+    if (rc /= 0_c_int) print *, "send_fake_table error rc=", rc
+
+    deallocate(cjson)
+  end subroutine send_fake_table
+
+end module tlsv2_server_mod
+
+! ============================================================
+program tlsv2_server_demo
+  use iso_c_binding
+  use tlsv2_server_mod
+  implicit none
+
+  type(tlsv2_server_config_t) :: cfg
+  character(kind=c_char), dimension(:), allocatable :: cert_c, key_c
+  integer :: i
+  character(len=*), parameter :: cert_f = "server.crt"
+  character(len=*), parameter :: key_f  = "server.key"
+
+  ! Prepare C strings for cert/key
+  allocate(cert_c(0:len_trim(cert_f)))
+  do i = 1, len_trim(cert_f)
+     cert_c(i-1) = transfer(cert_f(i:i), cert_c(0))
+  end do
+  cert_c(len_trim(cert_f)) = c_null_char
+
+  allocate(key_c(0:len_trim(key_f)))
+  do i = 1, len_trim(key_f)
+     key_c(i-1) = transfer(key_f(i:i), key_c(0))
+  end do
+  key_c(len_trim(key_f)) = c_null_char
+
+  cfg%port = 8443_c_int
+  cfg%cert_file = c_loc(cert_c(0))
+  cfg%key_file  = c_loc(key_c(0))
+  cfg%on_client_connected    = c_funloc(on_client_connected_c)
+  cfg%on_client_disconnected = c_funloc(on_client_disconnected_c)
+  cfg%on_json_received       = c_funloc(on_json_received_c)
+
+  print *, "Starting Fortran TLSv2 server on port", cfg%port
+  call tlsv2_server_run(cfg)
+  print *, "Server stopped."
+
+end program tlsv2_server_demo
+```
+
+If you want, next step we can tighten these into proper `module`s with clean public APIs and drop‑in examples for your SDK tree.

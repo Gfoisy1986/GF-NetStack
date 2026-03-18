@@ -1,0 +1,234 @@
+Nice—time to give Fortran its SQLite superpowers too.
+
+Below is a **Fortran95 binding for `sqlite_wrapper.c`**, plus how to **wire it into your existing TLSv2 Fortran server** so it can answer SQL over TLS with JSON tables.
+
+---
+
+### 1. `sqlite_dbw_f90.f90` — Fortran95 bindings for `sqlite_wrapper.c`
+
+```fortran
+! sqlite_dbw_f90.f90
+module sqlite_dbw_mod
+  use iso_c_binding
+  implicit none
+
+  integer(c_int) :: dbw_handle = -1_c_int
+
+  interface
+     function dbw_open(path) bind(C, name="dbw_open")
+       import :: c_char, c_int
+       character(c_char), dimension(*) :: path
+       integer(c_int) :: dbw_open
+     end function
+
+     subroutine dbw_close(handle) bind(C, name="dbw_close")
+       import :: c_int
+       integer(c_int), value :: handle
+     end subroutine
+
+     function dbw_exec_ok(handle, sql) bind(C, name="dbw_exec_ok")
+       import :: c_int, c_char
+       integer(c_int), value :: handle
+       character(c_char), dimension(*) :: sql
+       integer(c_int) :: dbw_exec_ok
+     end function
+
+     function dbw_exec_json(handle, sql, json_out) bind(C, name="dbw_exec_json")
+       import :: c_int, c_char, c_ptr
+       integer(c_int), value :: handle
+       character(c_char), dimension(*) :: sql
+       type(c_ptr) :: json_out
+       integer(c_int) :: dbw_exec_json
+     end function
+
+     subroutine dbw_free_json(json) bind(C, name="dbw_free_json")
+       import :: c_ptr
+       type(c_ptr), value :: json
+     end subroutine
+  end interface
+
+contains
+
+  function c_string_from_f(fstr) result(cbuf)
+    character(len=*), intent(in) :: fstr
+    character(c_char), dimension(:), allocatable :: cbuf
+    integer :: n, i
+
+    n = len_trim(fstr)
+    allocate(cbuf(0:n))
+    do i = 1, n
+       cbuf(i-1) = transfer(fstr(i:i), cbuf(0))
+    end do
+    cbuf(n) = c_null_char
+  end function c_string_from_f
+
+  function dbw_exec_json_to_string(sql) result(json)
+    character(len=*), intent(in) :: sql
+    character(len=:), allocatable :: json
+    character(c_char), dimension(:), allocatable :: csql
+    type(c_ptr) :: pjson
+    integer(c_int) :: rc
+    character(kind=c_char), pointer :: pchars(:)
+    integer :: n, i
+
+    json = ""
+    if (dbw_handle < 0_c_int) return
+
+    csql = c_string_from_f(sql)
+    pjson = c_null_ptr
+    rc = dbw_exec_json(dbw_handle, csql, pjson)
+    deallocate(csql)
+
+    if (rc /= 0_c_int .or. .not. c_associated(pjson)) return
+
+    call c_f_pointer(pjson, pchars, [0])  ! unknown length, we’ll scan
+    n = 0
+    do
+       if (pchars(n) == c_null_char) exit
+       n = n + 1
+    end do
+
+    allocate(character(len=n) :: json)
+    do i = 1, n
+       json(i:i) = transfer(pchars(i-1), json(1:1))
+    end do
+
+    call dbw_free_json(pjson)
+  end function dbw_exec_json_to_string
+
+end module sqlite_dbw_mod
+```
+
+---
+
+### 2. Wire SQLite into your Fortran TLS server
+
+Assuming your previous `tlsv2_server_mod` from earlier, here’s how to:
+
+- open the DB in `main`
+- handle `"type":"table"` + `"cmd":"SQL"` in `on_json_received_c`
+- return JSON table via `tlsv2_send_json`
+
+#### a) Open DB in `tlsv2_server_demo`
+
+```fortran
+program tlsv2_server_demo
+  use iso_c_binding
+  use tlsv2_server_mod
+  use sqlite_dbw_mod
+  implicit none
+
+  type(tlsv2_server_config_t) :: cfg
+  character(kind=c_char), dimension(:), allocatable :: cert_c, key_c
+  integer :: i
+  character(len=*), parameter :: cert_f = "server.crt"
+  character(len=*), parameter :: key_f  = "server.key"
+
+  ! Open SQLite DB
+  character(c_char), dimension(:), allocatable :: dbpath_c
+  dbpath_c = c_string_from_f("mydb.sqlite")
+  dbw_handle = dbw_open(dbpath_c)
+  if (dbw_handle < 0_c_int) then
+     print *, "SQLite open failed"
+     stop
+  end if
+  print *, "SQLite DB opened, handle=", dbw_handle
+
+  ! ... existing cert/key C-string prep ...
+
+  cfg%port = 8443_c_int
+  cfg%cert_file = c_loc(cert_c(0))
+  cfg%key_file  = c_loc(key_c(0))
+  cfg%on_client_connected    = c_funloc(on_client_connected_c)
+  cfg%on_client_disconnected = c_funloc(on_client_disconnected_c)
+  cfg%on_json_received       = c_funloc(on_json_received_c)
+
+  print *, "Starting Fortran TLSv2 server on port", cfg%port
+  call tlsv2_server_run(cfg)
+  print *, "Server stopped."
+
+  call dbw_close(dbw_handle)
+
+end program tlsv2_server_demo
+```
+
+#### b) Extend `on_json_received_c` to handle SQL
+
+Inside `tlsv2_server_mod`, replace the `"type":"table"` handling with:
+
+```fortran
+  else if (index(s, '"type":"table"') > 0 .and. index(s, '"cmd":"SQL"') > 0) then
+     call handle_sql_request(client_id, s)
+```
+
+And add this helper in the same module:
+
+```fortran
+  subroutine handle_sql_request(client_id, s)
+    use sqlite_dbw_mod
+    use iso_c_binding
+    integer(c_int), value :: client_id
+    character(len=*), intent(in) :: s
+
+    character(len=:), allocatable :: sql, json_table, reply
+    integer :: p, p2
+
+    ! Very simple extraction of "sql":"...":
+    p = index(s, '"sql":"')
+    if (p <= 0) return
+    p = p + len('"sql":"')
+    p2 = index(s(p:), '"')
+    if (p2 <= 0) return
+    p2 = p + p2 - 2
+    allocate(character(len=p2-p+1) :: sql)
+    sql = s(p:p2)
+
+    print *, "Executing SQL: ", trim(sql)
+
+    json_table = dbw_exec_json_to_string(sql)
+    if (len_trim(json_table) == 0) then
+       reply = '{"type":"error","data":"SQLite error"}'
+    else
+       reply = '{"type":"table","cmd":"SQL_RESULT","data":'//trim(json_table)//'}'
+    end if
+
+    call send_raw_json(client_id, reply)
+  end subroutine handle_sql_request
+
+  subroutine send_raw_json(client_id, msg)
+    use iso_c_binding
+    integer(c_int), value :: client_id
+    character(len=*), intent(in) :: msg
+    character(c_char), dimension(:), allocatable :: cmsg
+    integer(c_size_t) :: n
+    integer :: i
+    integer(c_int) :: rc
+
+    n = len_trim(msg)
+    allocate(cmsg(0:n))
+    do i = 1, n
+       cmsg(i-1) = transfer(msg(i:i), cmsg(0))
+    end do
+    cmsg(n) = c_null_char
+
+    rc = tlsv2_send_json(client_id, cmsg, n)
+    if (rc /= 0_c_int) print *, "send_raw_json error rc=", rc
+
+    deallocate(cmsg)
+  end subroutine send_raw_json
+```
+
+---
+
+Now your **Fortran TLS server** can:
+
+- accept TLS clients  
+- receive JSON with `"type":"table","cmd":"SQL"`  
+- run the SQL via your C SQLite wrapper  
+- return a JSON table payload over TLS  
+
+If you want, next step we can:
+
+- factor this into clean `module`s (`tlsv2_server_f`, `dbw_sqlite_f`)  
+- add prepared statements  
+- or define a tiny Fortran JSON helper for safer field extraction.
