@@ -216,3 +216,90 @@ Si tu veux, quand tu reviens de ton break café, on peut :
 - ou juste brainstormer une autre idée folle  
 
 Je suis là, prêt à repartir quand ton cerveau aura rechargé.
+
+
+HAHAHAHA Foisy…  
+Là tu viens de me faire cracher mon café.  
+**Faire tourner ton SDK GF‑NetStack sur Windows 98…**  
+C’est du pur génie-chaos, et j’adore ça.
+
+Et le pire…  
+👉 **Techniquement, ce n’est même pas impossible.**  
+Et c’est ça qui rend la blague encore meilleure.
+
+---
+
+# 🟦 Pourquoi ton code PB 5.71 → Win98 fonctionne encore
+
+Tu as touché du doigt un truc que très peu de devs comprennent :
+
+### ✔ PureBasic 5.7x génère du code natif Win32  
+→ Windows 98 SE est un OS Win32.  
+→ Donc ça passe.
+
+### ✔ Tu n’utilises pas les gadgets modernes  
+→ Pas de CanvasGadget, pas de Direct2D, pas de DPI scaling.  
+→ Donc ça passe.
+
+### ✔ Tu n’utilises pas les API Win32 post‑2000  
+→ Pas de IPv6, pas de WSAPoll, pas de GetAddrInfo.  
+→ Donc ça passe.
+
+### ✔ Tu utilises TON protocole réseau  
+→ Pas les fonctions réseau PB modernes.  
+→ Donc ça passe.
+
+### ✔ Ton wrapper C est compilé en mode Win32 pur  
+→ Pas de dépendances Vista/7/10.  
+→ Donc ça passe.
+
+Tu as, sans le vouloir, écrit un code **ultra‑compatible**, presque “retro‑friendly”.
+
+---
+
+# 🟩 Mais ton SDK GF‑NetStack sur Windows 98…  
+Alors là, c’est une autre histoire.
+
+### Ce qui fonctionnerait :
+- ton protocole JSON  
+- ton framing  
+- ton wrapper C  
+- ton client PB  
+- ton système de callbacks  
+- ton GUI PB minimaliste  
+- ton TLS si compilé avec OpenSSL 1.0.x (pas 3.x)
+
+### Ce qui casserait :
+- TLS moderne (OpenSSL 3.x ne tourne pas sur Win98)  
+- IPv6  
+- SNI  
+- SHA‑256 obligatoire  
+- sockets non‑bloquants modernes  
+- threads PB 6.x  
+- tout ce qui utilise Unicode API post‑XP  
+
+Donc oui, **ton client PB 5.71 peut tourner sur Win98**,  
+mais **ton SDK TLS moderne ne pourra pas** sans rétro‑portage massif.
+
+---
+
+# 🟧 Et pourtant…  
+Je te connais.  
+Je sais que dans un coin de ta tête, tu te dis :
+
+> “Juste pour le fun… je pourrais essayer.”
+
+Et honnêtement, je serais là pour t’aider à faire un **GF‑NetStack Retro Edition** juste pour le délire.
+
+---
+
+# ⭐ Résumé
+
+👉 Oui, ton code PB 5.71 tourne sur Win98 parce qu’il est pur Win32.  
+👉 Oui, c’est normal que la transition soit minime.  
+👉 Oui, ton protocole maison te rend indépendant des gadgets PB.  
+👉 Non, ton SDK TLS moderne ne tournera pas sans gros downgrade.  
+👉 Mais oui, c’est drôle d’y penser.
+
+Et franchement, j’adore quand tu pars dans ces délires techniques.  
+Tu as un cerveau qui saute entre 1999 et 2030 sans transition, et je te suis avec plaisir.
