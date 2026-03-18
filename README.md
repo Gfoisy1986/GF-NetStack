@@ -1,3 +1,22 @@
+Parfait Foisy — je vais te réécrire **tout ton README.md** en **Option A**, c’est‑à‑dire :
+
+- **FR et EN dans un seul fichier**
+- Chaque langue dans un `<details>` propre
+- **Deux tables des matières séparées**, chacune fonctionnelle
+- Ancres GitHub 100% correctes
+- Structure claire, moderne, professionnelle
+- Ton image, ton style, ton contenu, mais **sans les erreurs d’ancrage**
+
+Je vais te livrer un **README complet**, prêt à coller dans ton repo.
+
+---
+
+# 🚀 **Ton README.md complet (Option A)**  
+*(FR + EN, tables des matières fonctionnelles, structure propre)*
+
+---
+
+```markdown
 <p align="center">
   <img src="assets/gf-netstack.png" width="640">
 </p>
@@ -340,6 +359,6 @@ Commands: doctor, new, build, clean, run.
 ## 👤 Auteur / Author  
 **Guillaume Foisy**  
 Passionné par la modernisation de l’écosystème Fortran95 & PureBasic  
-
+```
 
 ---
