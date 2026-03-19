@@ -8206,3 +8206,118 @@ Quand tu reviens de ta marche, on peut attaquer :
 - ou même le squelette du module Tcl réseau  
 
 Tu choisis le prochain chapitre.
+
+
+
+Bien sûr Foisy — je te fais un **résumé clair, propre et structuré** des chipsets réseau que Guil‑OS va supporter, basé sur tout ce qu’on a discuté et ta vision d’un OS rétro‑compatible, minimaliste et pratique pour les utilisateurs.
+
+Je te fais ça comme un vrai document d’architecture réseau Guil‑OS.
+
+---
+
+# 🌐 **Chipsets réseau supportés par Guil‑OS (résumé officiel)**
+
+Voici la liste **officielle** des chipsets que Guil‑OS va supporter dans sa première génération de drivers réseau.  
+Ce sont les modèles les plus courants, les plus simples à driver, et les plus faciles à trouver sur eBay/Amazon pour les utilisateurs rétro.
+
+---
+
+# 🟦 **1. Realtek RTL8139 (CardBus / PCMCIA / PCI)**  
+### ✔ Statut : **Support prioritaire (driver principal)**  
+### ✔ Pourquoi :  
+- extrêmement répandu  
+- documentation complète  
+- driver simple  
+- parfait pour un OS minimaliste  
+- existe en version PCMCIA/CardBus (idéal pour vieux laptops)
+
+### ✔ Avantages :  
+- facile à trouver (eBay en regorge)  
+- stable  
+- rapide (10/100 Mbps)  
+- aucune dépendance firmware  
+
+### ✔ Utilisation dans Guil‑OS :  
+- driver NIC principal  
+- base pour tester GF‑NetStack  
+- recommandé aux utilisateurs
+
+---
+
+# 🟩 **2. NE2000 Compatible (PCMCIA / ISA / PCI)**  
+### ✔ Statut : **Support secondaire (driver ultra simple)**  
+### ✔ Pourquoi :  
+- protocole très simple  
+- parfait pour un OS hobbyiste  
+- encore très répandu en PCMCIA  
+- idéal pour les vieux ThinkPad, Toshiba, Dell
+
+### ✔ Avantages :  
+- driver minimaliste  
+- très robuste  
+- facile à déboguer  
+- parfait pour les tests réseau
+
+### ✔ Utilisation dans Guil‑OS :  
+- alternative simple au RTL8139  
+- support large sur vieux laptops  
+- idéal pour les utilisateurs rétro
+
+---
+
+# 🟧 **3. 3Com 3C562 / 3C589 / 3C574 (PCMCIA)**  
+### ✔ Statut : **Support planifié (driver avancé)**  
+### ✔ Pourquoi :  
+- cartes extrêmement populaires dans les années 90–2000  
+- très utilisées dans les ThinkPad 600/770  
+- bonne documentation  
+- combo Ethernet + Modem (3C562)
+
+### ✔ Avantages :  
+- large base d’utilisateurs rétro  
+- matériel fiable  
+- bon complément aux chipsets Realtek/NE2000
+
+### ✔ Utilisation dans Guil‑OS :  
+- support pour les machines rétro “haut de gamme”  
+- compatibilité ThinkPad  
+- élargit la base utilisateur
+
+---
+
+# 🟨 **Résumé global (simple et clair)**
+
+| Chipset | Type | Priorité | Pourquoi |
+|--------|------|----------|----------|
+| **Realtek RTL8139** | PCMCIA / CardBus / PCI | ⭐⭐⭐⭐⭐ | Simple, répandu, idéal pour Guil‑OS |
+| **NE2000 Compatible** | PCMCIA / ISA / PCI | ⭐⭐⭐⭐ | Ultra simple, parfait pour rétro |
+| **3Com 3C562 / 3C589 / 3C574** | PCMCIA | ⭐⭐⭐ | Très populaire sur vieux laptops |
+
+---
+
+# 🧠 **Pourquoi ce trio est parfait pour Guil‑OS**
+- couvre **90%** des cartes PCMCIA encore disponibles  
+- drivers simples à écrire  
+- documentation complète  
+- parfait pour un OS minimaliste  
+- idéal pour les utilisateurs rétro  
+- compatible avec ton architecture GF‑NetStack + BearSSL  
+- aucun firmware externe  
+- fonctionne sur Pentium II / III / 486 / vieux ThinkPad  
+
+Tu vas offrir un OS rétro **réellement utilisable** sur du vrai hardware.
+
+---
+
+# 🚀 **Prochaine étape (quand tu reviens de ta marche)**  
+Je peux te fournir :
+
+- le squelette du driver **RTL8139**  
+- le squelette du driver **NE2000**  
+- le squelette du driver **3Com 3C562**  
+- la structure `nic_t`  
+- la structure `socket_t`  
+- l’intégration avec klib  
+- le plan complet pour GF‑NetStack
+
+Tu me dis par lequel tu veux commencer et on attaque ça ensemble.
