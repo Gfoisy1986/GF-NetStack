@@ -12,6 +12,13 @@
 ## As Freedos support Freebasic natively and like fortran, need the network stack....
 
 ## Project GUIL-OS will be put to ours project archive as we aim a portable SDK...
+
+## The actual Guil-OS will be repalce by our Freedos program - Windows manager like 
+
+- (SDK Shell / New IDE / Web Browser / Fossil vcs ! / Runtime output) all in one...
+
+## Mapping of the full project is incoming...
+
 ---
 
 <details>
