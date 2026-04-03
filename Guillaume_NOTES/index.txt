@@ -1,0 +1,285 @@
+🎯 Vision générale de Guil‑OS
+Guil‑OS est un système d’exploitation bare‑metal conçu comme un laboratoire d’apprentissage et d’expérimentation.
+L’objectif n’est pas de concurrencer les OS modernes, mais de proposer une base :
+
+claire
+
+modulaire
+
+documentée
+
+…pour explorer les mécanismes internes d’un OS, du bootloader jusqu’aux couches réseau et applicatives.
+
+🧠 Objectifs principaux
+Pédagogie :  
+Fournir un code simple, commenté et structuré pour comprendre les fondations d’un OS (boot, mémoire, interruptions, drivers, réseau, etc.).
+
+Transparence technique :  
+Aucune boîte noire. Chaque étape est exposée, expliquée et traçable.
+
+Base d’expérimentation :  
+Permettre l’ajout de modules, de drivers, de stacks réseau, de moteurs graphiques et de concepts avancés.
+
+Architecture x86 uniquement :  
+Guil‑OS se concentre volontairement sur l’architecture x86 classique, afin de rester compatible avec de très vieux ordinateurs (Pentium II, Pentium III, etc.).
+
+Valorisation du matériel ancien :  
+Le projet encourage la réutilisation de vieux PC encore fonctionnels.
+En optimisant le système pour tourner sur du matériel limité, Guil‑OS :
+
+réduit le gaspillage électronique
+
+prolonge la durée de vie de machines jugées “obsolètes”
+
+transforme ces PC en plateformes d’apprentissage modernes
+
+🧩 Rôle central de wrapper.c et de GF‑NetStack
+Le fichier wrapper.c est le centre névralgique du système.
+Il joue le rôle de :
+
+couche d’abstraction unifiée pour les appels système
+
+point d’entrée pour les services réseau, TLS, bases de données, etc.
+
+interface stable entre le kernel, les drivers et les langages embarqués
+
+En parallèle, GF‑NetStack constitue la base réseau du projet :
+
+stack TCP/IP minimaliste mais extensible
+
+intégration étroite avec BearSSL pour le TLS
+
+API pensée pour être exposée à des langages de script (Tcl, Lua, Perl, etc.)
+
+future compatibilité FreeDOS via un backend dédié (GF‑NetStack_DOS)
+
+🧪 Vision technologique
+Guil‑OS ambitionne d’intégrer un ensemble d’outils modernes dans un environnement minimaliste :
+
+wrapper.c unifié :  
+Une couche d’abstraction simple pour les appels système, les sockets, le TLS, les bases de données locales et distantes.
+
+Support TLS / HTTPS :  
+Intégration de BearSSL pour tester des communications sécurisées directement depuis l’OS.
+
+WebSocket natif :  
+Support planifié pour des échanges temps réel et des protocoles modernes dans un environnement minimal.
+
+Moteur 2D intégré :  
+Un petit moteur graphique pour explorer :
+
+le rendu 2D
+
+les sprites
+
+les interfaces simples
+
+les primitives graphiques
+
+Intégration Tcl (à venir) :  
+Fournir un langage de script embarqué pour :
+
+automatiser
+
+tester
+
+prototyper rapidement
+
+Intégration SQLite locale :  
+Moteur de base de données embarqué pour :
+
+stockage léger
+
+configuration
+
+tests applicatifs
+
+applications locales autonomes
+
+Wrapper dédié aux bases de données distantes :  
+Module séparé pour communiquer avec :
+
+PostgreSQL
+
+SQLiteCloud
+via une interface unifiée gérant :
+
+connexions réseau
+
+authentification
+
+requêtes
+
+réponses
+
+Objectif à long terme : POSIX minimal :  
+Fournir un sous‑ensemble cohérent des API POSIX pour :
+
+faciliter le portage d’outils
+
+comprendre les standards
+
+garder le système simple et maîtrisé
+
+🌐 Chipsets réseau planifiés
+1. Realtek RTL8139 (CardBus / PCMCIA / PCI)
+Statut : Support prioritaire (driver principal)
+
+Pourquoi :
+
+extrêmement répandu
+
+documentation complète
+
+driver simple
+
+parfait pour un OS minimaliste
+
+existe en version PCMCIA/CardBus (idéal pour vieux laptops)
+
+Avantages :
+
+facile à trouver (eBay, recyclage)
+
+stable
+
+rapide (10/100 Mbps)
+
+aucune dépendance firmware
+
+Utilisation dans Guil‑OS :
+
+driver NIC principal
+
+base pour tester GF‑NetStack
+
+recommandé aux utilisateurs
+
+2. NE2000 Compatible (PCMCIA / ISA / PCI)
+Statut : Support secondaire (driver ultra simple)
+
+Pourquoi :
+
+protocole très simple
+
+parfait pour un OS hobbyiste
+
+encore très répandu en PCMCIA
+
+idéal pour les vieux ThinkPad, Toshiba, Dell
+
+Avantages :
+
+driver minimaliste
+
+très robuste
+
+facile à déboguer
+
+parfait pour les tests réseau
+
+Utilisation dans Guil‑OS :
+
+alternative simple au RTL8139
+
+support large sur vieux laptops
+
+idéal pour les utilisateurs rétro
+
+3. 3Com 3C562 / 3C589 / 3C574 (PCMCIA)
+Statut : Support planifié (driver avancé)
+
+Pourquoi :
+
+cartes extrêmement populaires dans les années 90–2000
+
+très utilisées dans les ThinkPad 600/770
+
+bonne documentation
+
+combo Ethernet + Modem (3C562)
+
+Avantages :
+
+large base d’utilisateurs rétro
+
+matériel fiable
+
+bon complément aux chipsets Realtek/NE2000
+
+Utilisation dans Guil‑OS :
+
+support pour les machines rétro “haut de gamme”
+
+compatibilité ThinkPad
+
+élargit la base utilisateur
+
+📊 Résumé des chipsets
+Chipset	Type	Priorité	Pourquoi
+Realtek RTL8139	PCMCIA / CardBus / PCI	⭐⭐⭐⭐⭐	Simple, répandu, idéal pour Guil‑OS
+NE2000 Compatible	PCMCIA / ISA / PCI	⭐⭐⭐⭐	Ultra simple, parfait pour rétro
+3Com 3C562 / 3C589 / 3C574	PCMCIA	⭐⭐⭐	Très populaire sur vieux laptops
+📡 Objectif Wi‑Fi à long terme
+Première carte Wi‑Fi ciblée :
+
+Carte	Version	Chipset	Type
+Linksys WPC11	v4	Realtek RTL8180L	Wi‑Fi 802.11b
+Statut : objectif à long terme
+
+Pourquoi :
+
+carte PCMCIA très répandue
+
+chipset documenté
+
+bon point d’entrée pour un driver Wi‑Fi minimal (802.11b, WEP)
+
+Complexité :
+
+gestion des frames 802.11
+
+scanning, association, authentification
+
+gestion WEP (WPA/WPA2 = projet ultérieur)
+
+Le Wi‑Fi est volontairement planifié après les drivers Ethernet et la stabilisation de GF‑NetStack.
+
+🖥️ Machine de test actuelle
+Machine de référence : IBM ThinkPad 770ED
+
+Processeur : Intel Pentium II MMX @ 266 MHz
+
+Mémoire RAM : 424 Mo SDRAM @ 100 MHz
+
+Stockage : Disque dur IDE 40 Go
+
+Carte graphique : 4 Mo de VRAM (chipset NeoMagic)
+
+Carte réseau : 3Com 3C562 PCMCIA (Ethernet + Modem)
+
+Lecteur optique : DVD‑ROM intégré
+
+Périphériques : souris PS/2 supportée
+
+Pourquoi ce choix ?
+Accessibilité :  
+Ces machines sont faciles à trouver et très peu coûteuses.
+
+Écologie :  
+Prolonger la vie de vieux PC réduit le gaspillage électronique.
+
+Robustesse :  
+Les ThinkPad de cette génération sont réputés pour leur fiabilité.
+
+Défi technique :  
+Optimiser un OS pour du matériel limité force à écrire un système :
+
+plus propre
+
+plus efficace
+
+plus compréhensible
+
+Ce choix reflète la philosophie de Guil‑OS :
+un système simple, transparent, capable de fonctionner sur du matériel oublié, tout en offrant une plateforme d’apprentissage moderne et expérimentale.

@@ -1,0 +1,312 @@
+Ahhh oui, je m’en souviens très bien — ton idée de porter ton **SDK OpenSSL → BearSSL** pour qu’il tourne proprement sous **FreeDOS 1.4**.  
+Et tu vas être content : **c’est 100% faisable**, mais il y a quelques prérequis techniques incontournables.
+
+Je te fais ça clair, structuré, et adapté à ton style Guil‑OS / rétro‑hardware.
+
+---
+
+# 🎯 **Résumé immédiat : ce qu’il faut pour faire tourner BearSSL sous FreeDOS 1.4**
+Tu as besoin de **4 choses** :
+
+1. **Un compilateur 16‑bit ou 32‑bit DOS‑compatible**  
+2. **Un TCP/IP stack DOS** (mTCP ou wattcp)  
+3. **Un portage minimal de BearSSL** (mode “no malloc”, “no dynamic”)  
+4. **Un wrapper réseau** entre BearSSL et le stack DOS choisi
+
+Et c’est tout.  
+Pas de DLL, pas de threads, pas de sockets modernes.
+
+---
+
+# 🧱 1. **Le compilateur DOS**
+Tu as trois options réalistes :
+
+### ✔ **OpenWatcom v2** (le meilleur choix)
+- Génère du 16‑bit et 32‑bit DOS  
+- Supporte les modèles mémoire DOS (tiny, small, medium, large)  
+- Très stable  
+- Parfait pour BearSSL en mode “static”
+
+### ✔ DJGPP (32‑bit DPMI)
+- Nécessite CWSDPMI  
+- Plus moderne  
+- Mais BearSSL doit être compilé en 32‑bit flat  
+- Fonctionne très bien si tu veux éviter les segments DOS
+
+### ✔ Turbo C / Borland C (historique)
+- Trop limité pour BearSSL moderne  
+- Pas recommandé
+
+👉 **Recommandation : OpenWatcom v2**  
+C’est le plus simple, le plus propre, le plus compatible FreeDOS.
+
+---
+
+# 🌐 2. **Le stack TCP/IP DOS**
+FreeDOS n’a **pas de sockets**.  
+Donc tu dois utiliser un stack réseau externe.
+
+Les deux options :
+
+### ✔ **mTCP** (le plus simple)
+- Très léger  
+- API simple (TCP connect, send, recv)  
+- Fonctionne sur toutes les cartes compatibles packet driver  
+- Parfait pour un SDK minimaliste
+
+### ✔ **WattTCP**
+- Plus complet  
+- Plus proche des sockets BSD  
+- Plus lourd  
+- Plus complexe à intégrer
+
+👉 **Recommandation : mTCP**  
+Tu veux un wrapper simple → mTCP est parfait.
+
+---
+
+# 🔒 3. **BearSSL en mode DOS**
+BearSSL est conçu pour être portable, mais pour DOS tu dois :
+
+### ✔ Désactiver :
+- malloc  
+- free  
+- dynamic buffers  
+- big integers optionnels  
+- features non nécessaires (OCSP, X.509 avancé)
+
+### ✔ Activer :
+- Static I/O buffers  
+- Static session  
+- Static key structures  
+- No threading  
+- No time API (tu fournis ton propre timestamp)
+
+### ✔ Compiler avec :
+```
+-D BR_NO_MALLOC
+-D BR_USE_UNALIGNED
+-D BR_NO_ARITHMETIC
+```
+
+### ✔ Utiliser les “contexts” statiques :
+- `br_ssl_client_context`
+- `br_x509_minimal_context`
+- `br_sslio_context`
+
+Tout doit être **pré‑alloué** dans ton EXE DOS.
+
+---
+
+# 🔌 4. **Le wrapper réseau (la pièce maîtresse)**
+BearSSL attend des fonctions de type :
+
+```c
+size_t read(void *ctx, unsigned char *buf, size_t len);
+size_t write(void *ctx, const unsigned char *buf, size_t len);
+```
+
+mTCP fournit :
+
+```c
+tcp_read(socket, buffer, length);
+tcp_write(socket, buffer, length);
+```
+
+Donc tu écris un petit adaptateur :
+
+```c
+size_t dos_net_read(void *ctx, unsigned char *buf, size_t len) {
+    return tcp_read(*(int*)ctx, buf, len);
+}
+
+size_t dos_net_write(void *ctx, const unsigned char *buf, size_t len) {
+    return tcp_write(*(int*)ctx, buf, len);
+}
+```
+
+Puis tu branches ça dans BearSSL :
+
+```c
+br_sslio_init(&ioc, &sc, dos_net_read, &sock, dos_net_write, &sock);
+```
+
+Et voilà :  
+**TLS 1.2 sous FreeDOS.**
+
+---
+
+# 🧩 Ce que ton SDK doit fournir
+Pour que ton SDK fonctionne sous FreeDOS :
+
+### ✔ Un EXE DOS compilé avec OpenWatcom  
+### ✔ BearSSL compilé en mode statique  
+### ✔ Un wrapper mTCP  
+### ✔ Un packet driver (NE2000, 3Com, Intel, Realtek…)  
+### ✔ CWSDPMI si tu utilises DJGPP  
+### ✔ Un fichier `config.ini` pour l’IP si tu veux être propre
+
+---
+
+# 🚀 Ce que tu peux faire ensuite
+Tu peux :
+
+- Ajouter un **client HTTPS** DOS  
+- Ajouter un **downloader TLS**  
+- Ajouter un **mini‑curl DOS**  
+- Ajouter un **SDK TLS pour FreeDOS** (unique au monde)  
+- Intégrer ça dans Guil‑OS pour rétro‑machines
+
+---
+
+# 🎁 Si tu veux, je peux te générer :
+- Le **Makefile OpenWatcom**  
+- Le **portage minimal BearSSL pour DOS**  
+- Le **wrapper mTCP complet**  
+- Un **exemple de client HTTPS DOS**  
+- Un **SDK DOS TLS packagé proprement**
+
+Tu veux qu’on commence par quoi ?
+
+
+Ahhh Foisy… là tu touches **le vrai nerf de la guerre** pour faire tourner ton SDK TLS sous FreeDOS :  
+👉 **avoir une carte réseau DOS‑compatible, avec un driver Packet Driver fonctionnel.**
+
+Et bonne nouvelle :  
+**ta 3Com 3C562 (PCMCIA) est *parfaite* pour FreeDOS 1.4**, mais elle demande une séquence d’initialisation très précise, sinon elle ne répond pas.
+
+Je te fais ça clair, propre, rétro‑compatible, façon Guil‑OS.
+
+---
+
+# ⭐ 1. La 3Com 3C562 : ce qu’elle est vraiment
+C’est une carte **PCMCIA combo Ethernet + Modem**, basée sur le chipset **3C589** côté réseau.
+
+Donc pour DOS, elle utilise :
+
+- **Card Services** (PCMCIA)  
+- **Socket Services**  
+- **Le driver 3C589 Packet Driver** (oui, même si c’est une 3C562)
+
+---
+
+# ⭐ 2. Ce qu’il faut ABSOLUMENT pour la faire fonctionner sous FreeDOS 1.4
+
+### ✔ 1. Un contrôleur PCMCIA actif  
+Sur un vrai laptop rétro, c’est OK.  
+Sur un laptop moderne → impossible (pas de PCMCIA).
+
+### ✔ 2. Les drivers PCMCIA DOS :
+Tu dois charger **dans cet ordre** :
+
+```
+SSPCIC.EXE        ; Socket Services (Intel, TI, Cirrus…)
+CS.EXE            ; Card Services
+CARDID.EXE        ; Identifie la carte
+```
+
+Selon le chipset PCMCIA, tu utiliseras :
+
+- `SSPCIC.EXE` (Intel)  
+- `SS365SL.EXE` (Cirrus Logic)  
+- `SSPCIC.EXE` (TI)  
+- `SSPCIC.EXE` (Ricoh)  
+
+FreeDOS ne fournit pas ces drivers → tu dois prendre ceux de **SystemSoft** ou **Intel Card Services**.
+
+---
+
+# ⭐ 3. Le driver réseau : 3C589PD.COM (Packet Driver)
+Pour DOS, tu veux **le driver Packet Driver**, pas le NDIS.
+
+Le bon fichier est :
+
+```
+3C589PD.COM
+```
+
+Même pour ta 3C562, car elle utilise le même chipset Ethernet.
+
+Tu le lances comme ceci :
+
+```
+3C589PD 0x60
+```
+
+- `0x60` = numéro d’interruption logiciel utilisé par mTCP  
+- Tu peux utiliser `0x61`, `0x62`, etc.
+
+Si tout va bien, tu verras :
+
+```
+3Com 3C589/3C562 Packet Driver installed on interrupt 0x60
+```
+
+---
+
+# ⭐ 4. Tester la carte avec mTCP
+Une fois le Packet Driver chargé, tu testes :
+
+```
+DHCP
+```
+
+Si tu obtiens une IP → ta carte fonctionne.
+
+Ensuite :
+
+```
+PING 8.8.8.8
+```
+
+Si ça répond → tu es prêt pour BearSSL.
+
+---
+
+# ⭐ 5. Ce que ton SDK TLS aura besoin ensuite
+Une fois la carte fonctionnelle, ton SDK pourra utiliser :
+
+- `tcp_open()`  
+- `tcp_write()`  
+- `tcp_read()`  
+- `tcp_close()`  
+
+de **mTCP** comme backend réseau.
+
+Tu pourras alors brancher BearSSL dessus.
+
+---
+
+# ⭐ 6. Résumé ultra‑clair
+Pour faire fonctionner ta 3C562 sous FreeDOS 1.4 :
+
+### ✔ Charger les drivers PCMCIA :
+```
+SSPCIC.EXE
+CS.EXE
+CARDID.EXE
+```
+
+### ✔ Charger le Packet Driver :
+```
+3C589PD 0x60
+```
+
+### ✔ Tester avec mTCP :
+```
+DHCP
+PING 8.8.8.8
+```
+
+Si ça marche → ton SDK TLS pourra fonctionner.
+
+---
+
+# ⭐ Si tu veux, je peux te générer :
+- Un **CONFIG.SYS + AUTOEXEC.BAT** complet pour FreeDOS  
+- Le **pack PCMCIA DOS** compatible avec 3C562  
+- Le **script de démarrage mTCP**  
+- Le **wrapper réseau pour BearSSL**  
+- Un **client HTTPS DOS minimal**  
+
+Tu veux qu’on assemble tout ça étape par étape ?
