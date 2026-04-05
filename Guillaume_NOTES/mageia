@@ -1,0 +1,113 @@
+Ohhh mon Foisy… **Mageia i586 est littéralement un paradis pour le rétro‑dev moderne**.  
+Tu vas être content : oui, tu as **un navigateur 32‑bit**, oui tu as **un IDE léger comme Geany**, et oui tout ça fonctionne parfaitement sur Pentium‑class.
+
+Je te fais ça clair, propre, efficace.
+
+---
+
+# 🟢 **Navigateur 32‑bit sur Mageia i586**
+Mageia 9 fournit encore plusieurs navigateurs compatibles 32‑bit, dont :
+
+### ✔ **SeaMonkey (32‑bit)**
+Disponible dans les dépôts officiels :
+
+```
+sudo dnf install seamonkey
+```
+
+SeaMonkey est parfait pour du rétro :
+
+- moteur Gecko  
+- léger  
+- stable  
+- compatible Pentium  
+- pas trop gourmand en RAM  
+
+### ✔ **Firefox ESR 32‑bit**
+Mageia fournit aussi Firefox ESR en i586 :
+
+```
+sudo dnf install firefox
+```
+
+Il est plus lourd que SeaMonkey, mais encore utilisable sur Pentium II/III.
+
+### ✔ **Falkon (QtWebEngine)**
+Plus moderne, mais un peu plus lourd :
+
+```
+sudo dnf install falkon
+```
+
+---
+
+# 🔵 **IDE léger pour programmer : Geany (32‑bit)**
+Oui, Mageia fournit **Geany** en version i586, et c’est un excellent choix pour ton workflow C / Fortran / FreeBASIC.
+
+Installation :
+
+```
+sudo dnf install geany
+```
+
+Geany est parfait pour toi :
+
+- ultra léger  
+- support syntaxique pour C, Fortran, BASIC, Lua, etc.  
+- plugins simples  
+- démarre instantanément même sur vieux CPU  
+- fonctionne avec Xorg minimal  
+
+---
+
+# 🟣 **Tu veux encore plus léger ?**
+Mageia propose aussi :
+
+### ✔ **Mousepad** (éditeur simple)
+```
+sudo dnf install mousepad
+```
+
+### ✔ **Leafpad**
+```
+sudo dnf install leafpad
+```
+
+### ✔ **SciTE** (excellent pour C et scripts)
+```
+sudo dnf install scite
+```
+
+---
+
+# 🟠 **Stack complet pour ton environnement dev Pentium‑class**
+Voici ce que je te recommande pour un setup parfait :
+
+```
+sudo dnf install \
+    gcc gcc-c++ gcc-fortran \
+    make binutils \
+    geany scite \
+    seamonkey firefox \
+    x11-server xinit xterm twm
+```
+
+Tu obtiens :
+
+- C / C++ / Fortran 95  
+- FreeBASIC compilable  
+- Xorg minimal  
+- Geany comme IDE  
+- SeaMonkey comme navigateur  
+- Un environnement moderne mais rétro‑compatible  
+
+---
+
+# 🎯 **Conclusion**
+Oui :  
+👉 **Mageia i586 supporte SeaMonkey 32‑bit**  
+👉 **Mageia i586 supporte Geany 32‑bit**  
+👉 **C’est parfait pour ton workflow rétro‑moderne**  
+👉 **Tu peux coder en C, Fortran, FreeBASIC, Lua, tout roule**  
+
+Tu veux que je te prépare une **liste complète des paquets pour un environnement dev Mageia minimaliste**, ou tu veux passer à l’installation Xorg minimal ?
