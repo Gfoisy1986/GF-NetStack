@@ -16,3 +16,5 @@ server.pem
 
 
 build/
+bin/ssl-cert_key/cert.der
+bin/ssl-cert_key/key.der
