@@ -14,3 +14,6 @@ openssl rsa -in server.key -out key.der -outform DER
 
 
 
+fbc tls_client.bas tls_wrapper_v3.o
+
+gcc server_c.c tls_wrapper_v3.o -o server_c -lbearssl
