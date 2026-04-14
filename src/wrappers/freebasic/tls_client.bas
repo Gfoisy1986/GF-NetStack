@@ -1,55 +1,43 @@
+#Inclib "bearssl"
 #Include "tls_wrapper_v3.bi"
-#inclib "bearssl"
+
+Extern "C"
+    Declare Function tlsv2_client_init() As Long
+    Declare Function tlsv2_client_connect(ByVal host As ZString Ptr, ByVal port As Long) As Long
+    Declare Function tlsv2_client_send_json(ByVal sock As Long, ByVal json As ZString Ptr, ByVal len As Long) As Long
+    Declare Function tlsv2_client_recv_json(ByVal sock As Long, ByVal buf As ZString Ptr, ByVal maxlen As Long) As Long
+    Declare Sub tlsv2_client_close_fd(ByVal sock As Long)
+End Extern
 
 Const MAXBUF = 65536
 
-Dim As Long sock
 Dim As String host = "127.0.0.1"
 Dim As Long port = 8443
+Dim As Long sock, ret
 
-Print "Init TLS client..."
+Print "[CLIENT] Init..."
 tlsv2_client_init()
 
-Print "Connecting..."
+Print "[CLIENT] Connecting..."
 sock = tlsv2_client_connect(StrPtr(host), port)
-
 If sock < 0 Then
-    Print "Connection failed: "; sock
+    Print "[CLIENT] Connect failed: "; sock
     End
 End If
+Print "[CLIENT] Connected, sock = "; sock
 
-Print "Connected! Socket = "; sock
-
-' -------------------------
-' SEND JSON
-' -------------------------
-Dim As String jsonOut = "{""cmd"":""hello"",""msg"":""from FreeBASIC""}"
-Dim As Long ret
-
+Dim As String jsonOut = "{""msg"":""hello from client""}"
 ret = tlsv2_client_send_json(sock, StrPtr(jsonOut), Len(jsonOut))
-If ret <> 0 Then
-    Print "Send error: "; ret
-    tlsv2_client_close_fd(sock)
-    End
-End If
+Print "[CLIENT] Send ret = "; ret
 
-Print "JSON sent."
-
-' -------------------------
-' RECEIVE JSON
-' -------------------------
 Dim As ZString * (MAXBUF+1) jsonIn
 ret = tlsv2_client_recv_json(sock, @jsonIn, MAXBUF)
-
-If ret < 0 Then
-    Print "Receive error: "; ret
+If ret > 0 Then
+    Print "[CLIENT] Received ("; ret; "): "; Left(jsonIn, ret)
 Else
-    Print "Received JSON ("; ret; " bytes):"
-    Print jsonIn
+    Print "[CLIENT] Receive error: "; ret
 End If
 
-' -------------------------
-' CLOSE
-' -------------------------
+Print "[CLIENT] Closing..."
 tlsv2_client_close_fd(sock)
-Print "Connection closed."
+Print "[CLIENT] Done."

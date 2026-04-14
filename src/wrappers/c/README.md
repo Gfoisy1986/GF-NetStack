@@ -13,7 +13,7 @@ openssl x509 -in server.pem -out cert.der -outform DER
 openssl rsa -in server.key -out key.der -outform DER
 
 
-
+fbc server_fb.bas tls_wrapper_v3.o
 fbc tls_client.bas tls_wrapper_v3.o
 
 gcc server_c.c tls_wrapper_v3.o -o server_c -lbearssl

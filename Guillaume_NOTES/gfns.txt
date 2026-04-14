@@ -1,0 +1,502 @@
+Here we go—minimal but real, wired for your TLS transport and PureBasic FFI.
+
+---
+
+### 1. Minimal `gfns_ws.h`
+
+```c
+/* gfns_ws.h */
+
+#ifndef GFNS_WS_H
+#define GFNS_WS_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct gfns_conn gfns_conn_t;   /* from your TLS/TCP layer */
+typedef struct gfns_ws   gfns_ws_t;
+
+typedef enum {
+    GFNS_WS_OP_CONT   = 0x0,
+    GFNS_WS_OP_TEXT   = 0x1,
+    GFNS_WS_OP_BINARY = 0x2,
+    GFNS_WS_OP_CLOSE  = 0x8,
+    GFNS_WS_OP_PING   = 0x9,
+    GFNS_WS_OP_PONG   = 0xA
+} gfns_ws_opcode_t;
+
+gfns_ws_t *gfns_ws_connect(
+    gfns_conn_t *conn,
+    const char  *host,
+    const char  *path,
+    const char  *subprotocol /* NULL if none */
+);
+
+int gfns_ws_send(
+    gfns_ws_t        *ws,
+    gfns_ws_opcode_t  opcode,
+    const void       *data,
+    size_t            len
+);
+
+int gfns_ws_recv(
+    gfns_ws_t        *ws,
+    gfns_ws_opcode_t *opcode_out,
+    void             *buf,
+    size_t            buf_size,
+    size_t           *len_out
+);
+
+int  gfns_ws_close(gfns_ws_t *ws, uint16_t code, const char *reason);
+void gfns_ws_free(gfns_ws_t *ws);
+
+/* High-level helper for PureBasic: ws:// or wss:// URL */
+gfns_ws_t *gfns_ws_open_url(const char *url);   /* returns NULL on error */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+```
+
+---
+
+### 2. Minimal `gfns_ws.c` skeleton
+
+This is intentionally bare: handshake stub + frame skeleton, ready to fill.
+
+```c
+/* gfns_ws.c */
+
+#include "gfns_ws.h"
+#include "gfns_conn.h"   /* your TCP/TLS abstraction */
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+struct gfns_ws {
+    gfns_conn_t *conn;
+    int          is_client;
+    int          closed;
+};
+
+static int ws_send_handshake(gfns_ws_t *ws,
+                             const char *host,
+                             const char *path,
+                             const char *subprotocol)
+{
+    /* TODO: generate real Sec-WebSocket-Key and validate Accept */
+    char req[512];
+
+    snprintf(req, sizeof(req),
+             "GET %s HTTP/1.1\r\n"
+             "Host: %s\r\n"
+             "Upgrade: websocket\r\n"
+             "Connection: Upgrade\r\n"
+             "Sec-WebSocket-Version: 13\r\n"
+             "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+             "%s"
+             "\r\n",
+             path,
+             host,
+             subprotocol ? "Sec-WebSocket-Protocol: " : "");
+
+    if (gfns_conn_write(ws->conn, req, strlen(req)) < 0)
+        return -1;
+
+    /* TODO: read and validate HTTP/1.1 101 response */
+    /* For now, just read some bytes and ignore */
+    char buf[512];
+    int  n = gfns_conn_read(ws->conn, buf, sizeof(buf));
+    if (n <= 0)
+        return -1;
+
+    return 0;
+}
+
+gfns_ws_t *gfns_ws_connect(
+    gfns_conn_t *conn,
+    const char  *host,
+    const char  *path,
+    const char  *subprotocol)
+{
+    if (!conn || !host || !path)
+        return NULL;
+
+    gfns_ws_t *ws = (gfns_ws_t *)calloc(1, sizeof(*ws));
+    if (!ws)
+        return NULL;
+
+    ws->conn      = conn;
+    ws->is_client = 1;
+    ws->closed    = 0;
+
+    if (ws_send_handshake(ws, host, path, subprotocol) < 0) {
+        free(ws);
+        return NULL;
+    }
+
+    return ws;
+}
+
+/* Minimal frame sender: no fragmentation, always FIN=1, client masking */
+static int ws_send_frame(
+    gfns_ws_t        *ws,
+    gfns_ws_opcode_t  opcode,
+    const void       *data,
+    size_t            len)
+{
+    if (!ws || ws->closed)
+        return -1;
+
+    uint8_t header[14];
+    size_t  hlen = 0;
+
+    uint8_t fin_opcode = 0x80 | (opcode & 0x0F); /* FIN=1 */
+    header[hlen++] = fin_opcode;
+
+    uint8_t mask_bit = 0x80; /* client → server must mask */
+    if (len <= 125) {
+        header[hlen++] = mask_bit | (uint8_t)len;
+    } else if (len <= 0xFFFF) {
+        header[hlen++] = mask_bit | 126;
+        header[hlen++] = (uint8_t)((len >> 8) & 0xFF);
+        header[hlen++] = (uint8_t)(len & 0xFF);
+    } else {
+        header[hlen++] = mask_bit | 127;
+        for (int i = 7; i >= 0; --i)
+            header[hlen++] = (uint8_t)((len >> (8 * i)) & 0xFF);
+    }
+
+    /* Simple pseudo-random mask (replace with better RNG later) */
+    uint8_t mask[4] = { 0x12, 0x34, 0x56, 0x78 };
+    memcpy(&header[hlen], mask, 4);
+    hlen += 4;
+
+    if (gfns_conn_write(ws->conn, header, hlen) < 0)
+        return -1;
+
+    /* Mask payload */
+    const uint8_t *src = (const uint8_t *)data;
+    uint8_t       *tmp = NULL;
+
+    if (len > 0) {
+        tmp = (uint8_t *)malloc(len);
+        if (!tmp)
+            return -1;
+
+        for (size_t i = 0; i < len; ++i)
+            tmp[i] = src[i] ^ mask[i & 3];
+
+        if (gfns_conn_write(ws->conn, tmp, len) < 0) {
+            free(tmp);
+            return -1;
+        }
+        free(tmp);
+    }
+
+    return 0;
+}
+
+int gfns_ws_send(
+    gfns_ws_t        *ws,
+    gfns_ws_opcode_t  opcode,
+    const void       *data,
+    size_t            len)
+{
+    return ws_send_frame(ws, opcode, data, len);
+}
+
+/* Minimal recv: assumes server frames are unmasked, no fragmentation */
+int gfns_ws_recv(
+    gfns_ws_t        *ws,
+    gfns_ws_opcode_t *opcode_out,
+    void             *buf,
+    size_t            buf_size,
+    size_t           *len_out)
+{
+    if (!ws || ws->closed || !opcode_out || !buf || !len_out)
+        return -1;
+
+    uint8_t h2[2];
+    if (gfns_conn_read(ws->conn, h2, 2) != 2)
+        return -1;
+
+    uint8_t fin    = (h2[0] & 0x80) != 0;
+    uint8_t opcode = (h2[0] & 0x0F);
+    uint8_t mask   = (h2[1] & 0x80) != 0;
+    uint64_t len   = (h2[1] & 0x7F);
+
+    if (!fin) {
+        /* TODO: handle fragmentation later */
+    }
+
+    if (len == 126) {
+        uint8_t ext[2];
+        if (gfns_conn_read(ws->conn, ext, 2) != 2)
+            return -1;
+        len = ((uint16_t)ext[0] << 8) | ext[1];
+    } else if (len == 127) {
+        uint8_t ext[8];
+        if (gfns_conn_read(ws->conn, ext, 8) != 8)
+            return -1;
+        len = 0;
+        for (int i = 0; i < 8; ++i)
+            len = (len << 8) | ext[i];
+    }
+
+    uint8_t mask_key[4];
+    if (mask) {
+        /* Server should not mask; read and ignore or treat as error */
+        if (gfns_conn_read(ws->conn, mask_key, 4) != 4)
+            return -1;
+    }
+
+    if (len > buf_size)
+        return -1;
+
+    if (gfns_conn_read(ws->conn, buf, (size_t)len) != (int)len)
+        return -1;
+
+    *opcode_out = (gfns_ws_opcode_t)opcode;
+    *len_out    = (size_t)len;
+
+    return 0;
+}
+
+int gfns_ws_close(gfns_ws_t *ws, uint16_t code, const char *reason)
+{
+    (void)code;
+    (void)reason;
+
+    if (!ws || ws->closed)
+        return -1;
+
+    ws_send_frame(ws, GFNS_WS_OP_CLOSE, NULL, 0);
+    ws->closed = 1;
+    return 0;
+}
+
+void gfns_ws_free(gfns_ws_t *ws)
+{
+    if (!ws)
+        return;
+    /* transport (gfns_conn_t) is owned by caller */
+    free(ws);
+}
+
+/* Very simple URL parser: wss://host/path or ws://host/path */
+extern gfns_conn_t *gfns_tcp_connect(const char *host, uint16_t port);
+extern gfns_conn_t *gfns_tls_connect(const char *host, uint16_t port);
+
+static int parse_url(const char *url,
+                     int        *is_secure,
+                     char       *host,
+                     size_t      host_sz,
+                     char       *path,
+                     size_t      path_sz)
+{
+    const char *p = NULL;
+
+    if (!strncmp(url, "wss://", 6)) {
+        *is_secure = 1;
+        p = url + 6;
+    } else if (!strncmp(url, "ws://", 5)) {
+        *is_secure = 0;
+        p = url + 5;
+    } else {
+        return -1;
+    }
+
+    const char *slash = strchr(p, '/');
+    if (!slash)
+        return -1;
+
+    size_t hlen = (size_t)(slash - p);
+    if (hlen >= host_sz)
+        return -1;
+
+    memcpy(host, p, hlen);
+    host[hlen] = '\0';
+
+    strncpy(path, slash, path_sz - 1);
+    path[path_sz - 1] = '\0';
+
+    return 0;
+}
+
+gfns_ws_t *gfns_ws_open_url(const char *url)
+{
+    int   is_secure = 0;
+    char  host[256];
+    char  path[256];
+
+    if (parse_url(url, &is_secure, host, sizeof(host), path, sizeof(path)) < 0)
+        return NULL;
+
+    gfns_conn_t *conn = NULL;
+    if (is_secure)
+        conn = gfns_tls_connect(host, 443);
+    else
+        conn = gfns_tcp_connect(host, 80);
+
+    if (!conn)
+        return NULL;
+
+    gfns_ws_t *ws = gfns_ws_connect(conn, host, path, NULL);
+    if (!ws) {
+        /* caller should close conn if needed */
+        return NULL;
+    }
+
+    return ws;
+}
+```
+
+This is deliberately “minimum viable”: handshake is stubbed, masking is fixed, no fragmentation. But the ABI is stable for you to wire PureBasic now and refine internals later.
+
+---
+
+### 3. PureBasic FFI declarations
+
+Assuming you build `gfns_ws.c` into a static or shared lib and expose C symbols:
+
+```pb
+; gfns_ws.pbi – PureBasic import
+
+Structure GFNS_WS
+  _opaque.l[4]  ; placeholder, not accessed from PB
+EndStructure
+
+Enumeration GFNS_WS_OPCODE
+  #GFNS_WS_OP_CONT   = $0
+  #GFNS_WS_OP_TEXT   = $1
+  #GFNS_WS_OP_BINARY = $2
+  #GFNS_WS_OP_CLOSE  = $8
+  #GFNS_WS_OP_PING   = $9
+  #GFNS_WS_OP_PONG   = $A
+EndEnumeration
+
+ImportC "gfns_ws.lib"
+  gfns_ws_open_url(url.p-ascii) As "_gfns_ws_open_url"
+  gfns_ws_send(*ws.GFNS_WS, opcode.l, *data, len.i) As "_gfns_ws_send"
+  gfns_ws_recv(*ws.GFNS_WS, *opcode_out.l, *buf, buf_size.i, *len_out.i) As "_gfns_ws_recv"
+  gfns_ws_close(*ws.GFNS_WS, code.w, reason.p-ascii) As "_gfns_ws_close"
+  gfns_ws_free(*ws.GFNS_WS) As "_gfns_ws_free"
+EndImport
+```
+
+Adjust calling convention / name decoration as needed for your platform.
+
+---
+
+### 4. High‑level PureBasic wrapper: `gf_ws(#PB_Any, "wss://...")`
+
+```pb
+; High-level wrapper
+
+Structure GF_WS_HANDLE
+  *ws.GFNS_WS
+EndStructure
+
+Global NewMap GF_WS.GF_WS_HANDLE()
+
+Procedure.i gf_ws(id.i, url.s)
+  Protected *ws.GFNS_WS
+
+  *ws = gfns_ws_open_url(url)
+  If *ws = 0
+    ProcedureReturn 0
+  EndIf
+
+  If id = #PB_Any
+    id = MapSize(GF_WS()) + 1
+  EndIf
+
+  AddMapElement(GF_WS(), Str(id))
+  GF_WS()\ws = *ws
+
+  ProcedureReturn id
+EndProcedure
+
+Procedure gf_ws_send_text(id.i, text.s)
+  If FindMapElement(GF_WS(), Str(id)) = 0 : ProcedureReturn : EndIf
+
+  Protected *ws.GFNS_WS = GF_WS()\ws
+  Protected *p.ASCII = AllocateMemory(Len(text) + 1)
+  PokeS(*p, text, -1, #PB_Ascii)
+
+  gfns_ws_send(*ws, #GFNS_WS_OP_TEXT, *p, MemoryStringLength(*p, #PB_Ascii))
+  FreeMemory(*p)
+EndProcedure
+
+Procedure.s gf_ws_recv_text(id.i)
+  If FindMapElement(GF_WS(), Str(id)) = 0 : ProcedureReturn "" : EndIf
+
+  Protected *ws.GFNS_WS = GF_WS()\ws
+  Protected opcode.l
+  Protected bufSize = 4096
+  Protected *buf = AllocateMemory(bufSize)
+  Protected len.i
+
+  If gfns_ws_recv(*ws, @opcode, *buf, bufSize, @len) < 0
+    FreeMemory(*buf)
+    ProcedureReturn ""
+  EndIf
+
+  If opcode <> #GFNS_WS_OP_TEXT
+    FreeMemory(*buf)
+    ProcedureReturn ""
+  EndIf
+
+  Protected result.s = PeekS(*buf, len, #PB_Ascii)
+  FreeMemory(*buf)
+  ProcedureReturn result
+EndProcedure
+
+Procedure gf_ws_close(id.i)
+  If FindMapElement(GF_WS(), Str(id)) = 0 : ProcedureReturn : EndIf
+
+  Protected *ws.GFNS_WS = GF_WS()\ws
+  gfns_ws_close(*ws, 1000, #Null$)
+  gfns_ws_free(*ws)
+  DeleteMapElement(GF_WS())
+EndProcedure
+```
+
+---
+
+### 5. PureBasic usage example
+
+```pb
+IncludeFile "gfns_ws.pbi"
+
+Define wsID.i
+
+wsID = gf_ws(#PB_Any, "wss://echo.websocket.events/")
+
+If wsID
+  gf_ws_send_text(wsID, "hello from GF-NetStack")
+  Debug "Sent."
+
+  Define reply.s = gf_ws_recv_text(wsID)
+  Debug "Reply: " + reply
+
+  gf_ws_close(wsID)
+Else
+  Debug "Failed to open WebSocket."
+EndIf
+```
+
+This gives you:
+
+- A concrete `gfns_ws.c` skeleton embedded in GF‑NetStack.
+- A clean PureBasic FFI.
+- A high‑level `gf_ws(#PB_Any, "wss://...")` that already feels like your future API.
+
+When you’re ready, we can tighten the handshake (real `Sec-WebSocket-Key` + `Sec-WebSocket-Accept`) and improve masking/fragmentation without breaking this surface.
