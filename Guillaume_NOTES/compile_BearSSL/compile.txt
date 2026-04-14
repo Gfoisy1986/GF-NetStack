@@ -1,0 +1,64 @@
+✅ How to Compile & Install BearSSL on Mageia 9 (from a git clone)
+01
+Install required build tools
+Start Here
+
+BearSSL uses a simple Makefile and requires only a C compiler and make.
+
+sudo urpmi gcc make git
+
+    Install development tools: sudo urpmi gcc make
+
+    (Optional) Install git if you haven't cloned yet: sudo urpmi git
+
+02
+Clone the BearSSL repository
+
+Get the source code locally if you haven't already.
+
+git clone https://www.bearssl.org/git/BearSSL
+
+    Run: git clone https://www.bearssl.org/git/BearSSL
+
+    Or use your existing cloned directory
+
+03
+Compile BearSSL
+Most Common Step
+
+BearSSL uses a plain Makefile — no configure script.
+
+cd BearSSL && make
+
+    Enter the directory: cd BearSSL
+
+    Build everything: make
+
+    This produces static library files in build/
+
+04
+Install the library manually
+
+BearSSL does not provide an installer, so installation is manual.
+
+sudo cp build/libbearssl.a /usr/local/lib/
+
+    Copy the static library: sudo cp build/libbearssl.a /usr/local/lib/
+
+    Copy headers: sudo cp -r inc/bearssl /usr/local/include/
+
+    Update library cache: sudo ldconfig
+
+05
+Verify installation
+Optional
+
+Ensure your system can find the library and headers.
+
+    Check header: /usr/local/include/bearssl.h
+
+    Check library: /usr/local/lib/libbearssl.a
+
+    Try compiling a test program using -lbearssl
+
+Sources: 

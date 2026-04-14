@@ -671,3 +671,193 @@ void tlsv2_client_close_fd(int sock) {
     free(c);
     }
     
+
+// ============================================================================
+// CLIENT SIDE (BLOCKING, PB-FRIENDLY)
+// ============================================================================
+
+typedef struct tlsv2_client_conn_s {
+    int   sock;
+    br_ssl_client_context sc;
+    br_x509_minimal_context xc;
+    br_sslio_context ioc;
+
+    unsigned char iobuf[TLSV2_IOBUF_SIZE];
+    unsigned char plainbuf[TLSV2_PLAINTEXT_SIZE];
+
+} tlsv2_client_conn_t;
+
+#define TLSV2_MAX_CLIENT_CONNS 64
+static tlsv2_client_conn_t *g_client_conns[TLSV2_MAX_CLIENT_CONNS] = {0};
+
+// ---------------------------------------------------------------------------
+// Registry helpers
+// ---------------------------------------------------------------------------
+
+static void tlsv2_register_client_conn(tlsv2_client_conn_t *c) {
+    for (int i = 0; i < TLSV2_MAX_CLIENT_CONNS; i++) {
+        if (!g_client_conns[i]) {
+            g_client_conns[i] = c;
+            return;
+        }
+    }
+}
+
+static tlsv2_client_conn_t *tlsv2_lookup_client_conn(int sock) {
+    for (int i = 0; i < TLSV2_MAX_CLIENT_CONNS; i++) {
+        if (g_client_conns[i] && g_client_conns[i]->sock == sock)
+            return g_client_conns[i];
+    }
+    return NULL;
+}
+
+static void tlsv2_unregister_client_conn(int sock) {
+    for (int i = 0; i < TLSV2_MAX_CLIENT_CONNS; i++) {
+        if (g_client_conns[i] && g_client_conns[i]->sock == sock) {
+            g_client_conns[i] = NULL;
+            return;
+        }
+    }
+}
+
+// ============================================================================
+// CLIENT INIT
+// ============================================================================
+
+int tlsv2_client_init(void) {
+    // Nothing to initialize globally for BearSSL client
+    return 0;
+}
+
+// ============================================================================
+// CLIENT CONNECT (BLOCKING)
+// ============================================================================
+
+int tlsv2_client_connect(const char *host, int port) {
+    tlsv2_client_conn_t *c = calloc(1, sizeof(tlsv2_client_conn_t));
+    if (!c) return -1;
+
+    // Create socket
+    c->sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (c->sock < 0) {
+        free(c);
+        return -1;
+    }
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons(port);
+    inet_pton(AF_INET, host, &addr.sin_addr);
+
+    if (connect(c->sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(c->sock);
+        free(c);
+        return -2;
+    }
+
+    // ---------------------------
+    // BearSSL client setup
+    // ---------------------------
+
+    // Minimal X.509 engine (no certificate validation)
+    br_x509_minimal_init(&c->xc, &br_sha256_vtable, NULL, 0);
+    br_ssl_client_init_full(&c->sc, &c->xc, NULL, 0);
+
+    // Set I/O buffers
+    br_ssl_engine_set_buffers_bidi(
+        &c->sc.eng,
+        c->iobuf, TLSV2_IOBUF_SIZE,
+        c->plainbuf, TLSV2_PLAINTEXT_SIZE
+    );
+
+    // Set SNI
+    br_ssl_client_reset(&c->sc, host, 0);
+
+    // Bind to socket using br_sslio
+    br_sslio_init(&c->ioc,
+                  &c->sc.eng,
+                  read,  c->sock,
+                  write, c->sock);
+
+    // Perform handshake (blocking)
+    if (br_sslio_flush(&c->ioc) < 0) {
+        close(c->sock);
+        free(c);
+        return -3;
+    }
+
+    tlsv2_register_client_conn(c);
+    return c->sock;
+}
+
+// ============================================================================
+// CLIENT SEND JSON (BLOCKING)
+// ============================================================================
+
+int tlsv2_client_send_json(int sock, const char *json, size_t len) {
+    tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
+    if (!c) return -1;
+
+    if (len > TLSV2_MAX_JSON_SIZE)
+        return -2;
+
+    uint32_t nlen = htonl((uint32_t)len);
+
+    // Send length
+    if (br_sslio_write_all(&c->ioc, &nlen, 4) < 0)
+        return -3;
+
+    // Send JSON
+    if (br_sslio_write_all(&c->ioc, json, len) < 0)
+        return -4;
+
+    if (br_sslio_flush(&c->ioc) < 0)
+        return -5;
+
+    return 0;
+}
+
+// ============================================================================
+// CLIENT RECEIVE JSON (BLOCKING)
+// ============================================================================
+
+int tlsv2_client_recv_json(int sock, char *buf, size_t maxlen) {
+    tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
+    if (!c) return -1;
+
+    uint32_t nlen;
+
+    // Read length
+    if (br_sslio_read(&c->ioc, &nlen, 4) != 4)
+        return -2;
+
+    nlen = ntohl(nlen);
+
+    if (nlen + 1 > maxlen)
+        return -3;
+
+    size_t total = 0;
+    while (total < nlen) {
+        int r = br_sslio_read(&c->ioc, buf + total, nlen - total);
+        if (r <= 0)
+            return -4;
+        total += r;
+    }
+
+    buf[nlen] = 0;
+    return (int)nlen;
+}
+
+// ============================================================================
+// CLIENT CLOSE
+// ============================================================================
+
+void tlsv2_client_close_fd(int sock) {
+    tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
+    if (!c) return;
+
+    close(c->sock);
+    tlsv2_unregister_client_conn(sock);
+    free(c);
+}
