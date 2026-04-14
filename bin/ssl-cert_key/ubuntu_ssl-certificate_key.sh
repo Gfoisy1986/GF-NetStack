@@ -16,8 +16,12 @@ openssl req \
   -keyout server.key \
   -out server.pem \
   -days 365 \
-  -nodes
+  -nodes \
+
+openssl x509 -in server.pem -out cert.der -outform DER \
+
+openssl rsa -in server.key -out key.der -outform DER
 
 echo "✅ Certificate generation complete."
-echo "   - Private key: server.key"
-echo "   - Certificate: server.pem"
+echo "   - Private key: key.der"
+echo "   - Certificate: cert.der"

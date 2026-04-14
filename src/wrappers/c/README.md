@@ -1,5 +1,7 @@
 gcc -shared -fPIC tls_wrapper_v3.c -o tls_wrapper_v3.so -lbearssl
 
+gcc -c tls_wrapper_v3.c -o tls_wrapper_v3.o -lbearssl
+
 
 
 ./ubuntu-certificate_key.sh
