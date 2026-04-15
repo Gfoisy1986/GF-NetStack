@@ -5,9 +5,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <unistd.h>           /* or closesocket() on Windows */
-#include <sys/socket.h>
-#include <netdb.h>
+
+#ifdef _WIN32
+    #include <windows.h>
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #pragma comment(lib, "ws2_32.lib")
+#else
+    #include <unistd.h>
+    #include <sys/socket.h>
+    #include <arpa/inet.h>
+    #include <netdb.h>
+    #include <errno.h>
+#endif
 
 struct gfns_conn {
     int      sock;
@@ -28,6 +38,11 @@ static int tcp_connect_raw(const char *host, uint16_t port)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_family   = AF_UNSPEC;
 
+#ifdef _WIN32
+    WSADATA wsa;
+    WSAStartup(MAKEWORD(2,2), &wsa);
+#endif
+
     if (getaddrinfo(host, portstr, &hints, &res) != 0)
         return -1;
 
@@ -37,8 +52,12 @@ static int tcp_connect_raw(const char *host, uint16_t port)
         return -1;
     }
 
-    if (connect(s, res->ai_addr, res->ai_addrlen) < 0) {
+    if (connect(s, res->ai_addr, (int)res->ai_addrlen) < 0) {
+#ifdef _WIN32
+        closesocket(s);
+#else
         close(s);
+#endif
         freeaddrinfo(res);
         return -1;
     }
@@ -55,7 +74,11 @@ gfns_conn_t *gfns_tcp_connect(const char *host, uint16_t port)
 
     gfns_conn_t *c = calloc(1, sizeof(*c));
     if (!c) {
+#ifdef _WIN32
+        closesocket(s);
+#else
         close(s);
+#endif
         return NULL;
     }
 
@@ -77,14 +100,22 @@ gfns_conn_t *gfns_tls_connect(const char *host, uint16_t port)
 
     void *ctx = tlsv3_client_connect(s, host);
     if (!ctx) {
+#ifdef _WIN32
+        closesocket(s);
+#else
         close(s);
+#endif
         return NULL;
     }
 
     gfns_conn_t *c = calloc(1, sizeof(*c));
     if (!c) {
         tlsv3_client_free(ctx);
+#ifdef _WIN32
+        closesocket(s);
+#else
         close(s);
+#endif
         return NULL;
     }
 
@@ -106,7 +137,11 @@ int gfns_conn_read(gfns_conn_t *c, void *buf, size_t len)
     if (c->is_tls)
         return tlsv3_client_read(c->tls_ctx, buf, len);
 
+#ifdef _WIN32
+    return recv(c->sock, (char*)buf, (int)len, 0);
+#else
     return recv(c->sock, buf, len, 0);
+#endif
 }
 
 int gfns_conn_write(gfns_conn_t *c, const void *buf, size_t len)
@@ -117,7 +152,11 @@ int gfns_conn_write(gfns_conn_t *c, const void *buf, size_t len)
     if (c->is_tls)
         return tlsv3_client_write(c->tls_ctx, buf, len);
 
+#ifdef _WIN32
+    return send(c->sock, (const char*)buf, (int)len, 0);
+#else
     return send(c->sock, buf, len, 0);
+#endif
 }
 
 /* --------------------------------------------------------- */
@@ -131,7 +170,13 @@ int gfns_conn_close(gfns_conn_t *c)
     if (c->is_tls)
         tlsv3_client_free(c->tls_ctx);
 
+#ifdef _WIN32
+    closesocket(c->sock);
+    WSACleanup();
+#else
     close(c->sock);
+#endif
+
     free(c);
     return 0;
 }

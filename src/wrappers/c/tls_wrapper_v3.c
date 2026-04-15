@@ -1,43 +1,31 @@
 // ============================================================================
-// tls_wrapper_v3.c
-// BearSSL 0.6
-// - Non-blocking multi-client TLS server (JSON length-prefixed)
-// - Blocking PB-friendly TLS client (JSON length-prefixed)
-// - CERT + KEY in DER (no PEM, no base64, no pemdec)
+// tls_wrapper_v3.c  —  Backend sockets cross‑platform (Linux + Windows)
 // ============================================================================
+#include "tls_wrapper_v3.h"
 
-#include <arpa/inet.h>
-#include <unistd.h>
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #include <windows.h>
+    #pragma comment(lib, "ws2_32.lib")
+#else
+    #include <unistd.h>
+    #include <fcntl.h>
+    #include <errno.h>
+    #include <arpa/inet.h>
+    #include <sys/socket.h>
+    #include <netdb.h>
+    #include <sys/select.h>
+#endif
+
+#include "bearssl/inc/bearssl.h"
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <stdint.h>
-
-#include <bearssl.h>
-
-
-
-static int tls_low_read(void *ctx, unsigned char *buf, size_t len) {
-    int fd = *(int*)ctx;
-    ssize_t r = read(fd, buf, len);
-    if (r < 0) return -1;
-    return (int)r;
-}
-
-static int tls_low_write(void *ctx, const unsigned char *buf, size_t len) {
-    int fd = *(int*)ctx;
-    ssize_t r = write(fd, buf, len);
-    if (r < 0) return -1;
-    return (int)r;
-}
 
 
 // ============================================================================
-// CONFIGURATION
+// CONFIGURATION GLOBALE
 // ============================================================================
 
 #define TLSV2_MAX_CLIENTS        64
@@ -47,88 +35,214 @@ static int tls_low_write(void *ctx, const unsigned char *buf, size_t len) {
 #define TLSV2_IOBUF_SIZE         (16 * 1024)   // encrypted I/O buffer
 #define TLSV2_PLAINTEXT_SIZE     (70 * 1024)   // decrypted plaintext buffer
 
-// ============================================================================
-// SERVER TYPES
-// ============================================================================
 
-typedef enum {
-    TLSV2_STATE_UNUSED = 0,
-    TLSV2_STATE_HANDSHAKE,
-    TLSV2_STATE_OPEN,
-    TLSV2_STATE_CLOSING
-} tlsv2_client_state_t;
-
-typedef struct tlsv2_client_s {
-    int fd;
-
-    // BearSSL engine
-    br_ssl_server_context sc;
-    br_x509_certificate   *certs;
-    size_t                 certs_len;
-    br_rsa_private_key     skey;
-
-    unsigned char iobuf[TLSV2_IOBUF_SIZE];
-    unsigned char plainbuf[TLSV2_PLAINTEXT_SIZE];
-
-    tlsv2_client_state_t state;
-
-    // JSON framing
-    unsigned char in_buf[TLSV2_MAX_JSON_SIZE + 4];
-    size_t        in_used;
-    uint32_t      expected_len;
-
-    unsigned char out_buf[TLSV2_MAX_JSON_SIZE + 4];
-    size_t        out_used;
-    size_t        out_sent;
-
-} tlsv2_client_t;
-
-typedef void (*tlsv2_on_client_connected)(int client_id);
-typedef void (*tlsv2_on_client_disconnected)(int client_id);
-typedef void (*tlsv2_on_json_received)(int client_id, const char *json, size_t len);
-
-typedef struct {
-    int port;
-    const char *cert_file; // DER
-    const char *key_file;  // DER
-
-    tlsv2_on_client_connected    on_client_connected;
-    tlsv2_on_client_disconnected on_client_disconnected;
-    tlsv2_on_json_received       on_json_received;
-} tlsv2_server_config_t;
 
 // ============================================================================
-// GLOBALS
+// GLOBAL INIT (Windows only)
 // ============================================================================
 
-static tlsv2_client_t        g_clients[TLSV2_MAX_CLIENTS];
-static tlsv2_server_config_t g_cfg;
-static int                   g_listen_fd = -1;
+#ifdef _WIN32
+static int g_wsa_initialized = 0;
 
-// We must keep DER buffers alive for the lifetime of the server
-static unsigned char        *g_cert_der_buf = NULL;
-static br_x509_certificate  *g_certs        = NULL;
-static size_t                g_certs_len    = 0;
+static int gfns_net_init(void)
+{
+    if (g_wsa_initialized)
+        return 0;
 
-static unsigned char        *g_key_der_buf  = NULL;
-static br_rsa_private_key    g_skey;
+    WSADATA wsa;
+    int r = WSAStartup(MAKEWORD(2,2), &wsa);
+    if (r != 0)
+        return -1;
 
-// ============================================================================
-// HELPER: Make socket non-blocking
-// ============================================================================
-
-static int make_nonblocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0) return -1;
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) return -1;
+    g_wsa_initialized = 1;
     return 0;
 }
+
+static void gfns_net_cleanup(void)
+{
+    if (g_wsa_initialized) {
+        WSACleanup();
+        g_wsa_initialized = 0;
+    }
+}
+#else
+static int gfns_net_init(void)   { return 0; }
+static void gfns_net_cleanup(void) { }
+#endif
+
+// ============================================================================
+// SOCKET TYPE + CLOSE
+// ============================================================================
+
+#ifdef _WIN32
+    typedef SOCKET gfns_sock_t;
+    #define GFNS_INVALID_SOCK INVALID_SOCKET
+    #define gfns_close_socket(s) closesocket(s)
+#else
+    typedef int gfns_sock_t;
+    #define GFNS_INVALID_SOCK (-1)
+    #define gfns_close_socket(s) close(s)
+#endif
+
+// ============================================================================
+// NON-BLOCKING MODE
+// ============================================================================
+
+static int gfns_set_nonblocking(gfns_sock_t s)
+{
+#ifdef _WIN32
+    u_long mode = 1;
+    if (ioctlsocket(s, FIONBIO, &mode) != 0)
+        return -1;
+    return 0;
+#else
+    int flags = fcntl(s, F_GETFL, 0);
+    if (flags < 0) return -1;
+    if (fcntl(s, F_SETFL, flags | O_NONBLOCK) < 0) return -1;
+    return 0;
+#endif
+}
+
+// ============================================================================
+// LOW-LEVEL READ/WRITE WRAPPERS (USED BY BearSSL I/O)
+// ============================================================================
+
+static int tls_low_read(void *ctx, unsigned char *buf, size_t len)
+{
+    gfns_sock_t s = *(gfns_sock_t*)ctx;
+
+#ifdef _WIN32
+    int r = recv(s, (char*)buf, (int)len, 0);
+    if (r <= 0) return -1;
+    return r;
+#else
+    ssize_t r = read(s, buf, len);
+    if (r <= 0) return -1;
+    return (int)r;
+#endif
+}
+
+static int tls_low_write(void *ctx, const unsigned char *buf, size_t len)
+{
+    gfns_sock_t s = *(gfns_sock_t*)ctx;
+
+#ifdef _WIN32
+    int r = send(s, (const char*)buf, (int)len, 0);
+    if (r <= 0) return -1;
+    return r;
+#else
+    ssize_t r = write(s, buf, len);
+    if (r <= 0) return -1;
+    return (int)r;
+#endif
+}
+
+// ============================================================================
+// ERROR HELPERS
+// ============================================================================
+
+static int gfns_would_block(void)
+{
+#ifdef _WIN32
+    int e = WSAGetLastError();
+    return (e == WSAEWOULDBLOCK);
+#else
+    return (errno == EAGAIN || errno == EWOULDBLOCK);
+#endif
+}
+
+// ============================================================================
+// LISTEN SOCKET CREATION (USED BY SERVER PART)
+// ============================================================================
+
+static gfns_sock_t gfns_create_listen_socket(int port)
+{
+    if (gfns_net_init() < 0)
+        return GFNS_INVALID_SOCK;
+
+    gfns_sock_t s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s == GFNS_INVALID_SOCK)
+        return GFNS_INVALID_SOCK;
+
+    int opt = 1;
+#ifdef _WIN32
+    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
+#else
+    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#endif
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family      = AF_INET;
+    addr.sin_port        = htons((uint16_t)port);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(s, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        gfns_close_socket(s);
+        return GFNS_INVALID_SOCK;
+    }
+
+    if (listen(s, 16) < 0) {
+        gfns_close_socket(s);
+        return GFNS_INVALID_SOCK;
+    }
+
+    if (gfns_set_nonblocking(s) < 0) {
+        gfns_close_socket(s);
+        return GFNS_INVALID_SOCK;
+    }
+
+    return s;
+}
+
+// ============================================================================
+// CONNECT SOCKET (USED BY CLIENT PART)
+// ============================================================================
+
+static gfns_sock_t gfns_connect_blocking(const char *host, int port)
+{
+    if (gfns_net_init() < 0)
+        return GFNS_INVALID_SOCK;
+
+    gfns_sock_t s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s == GFNS_INVALID_SOCK)
+        return GFNS_INVALID_SOCK;
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons((uint16_t)port);
+
+    if (inet_pton(AF_INET, host, &addr.sin_addr) <= 0) {
+        gfns_close_socket(s);
+        return GFNS_INVALID_SOCK;
+    }
+
+    if (connect(s, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+#ifdef _WIN32
+        int e = WSAGetLastError();
+        if (e != WSAEINPROGRESS && e != WSAEWOULDBLOCK) {
+            gfns_close_socket(s);
+            return GFNS_INVALID_SOCK;
+        }
+#else
+        if (errno != EINPROGRESS) {
+            gfns_close_socket(s);
+            return GFNS_INVALID_SOCK;
+        }
+#endif
+    }
+
+    return s;
+}
+
 
 // ============================================================================
 // DER LOADERS (NO PEM, NO BASE64)
 // ============================================================================
 
-static unsigned char *load_der(const char *path, size_t *out_len) {
+static unsigned char *load_der(const char *path, size_t *out_len)
+{
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
 
@@ -217,13 +331,74 @@ static int load_rsa_key_der(const char *path,
     return 0;
 }
 
+
 // ============================================================================
-// CLIENT INITIALIZATION
+// SECTION 2 — TLS SERVER (MULTI‑CLIENT, NON‑BLOCKING)
+// Cross‑platform: Linux (select) + Windows (WSAPoll)
 // ============================================================================
 
-static void tlsv2_clients_init(void) {
+// ---------------------------------------------------------------------------
+// CLIENT STATE MACHINE
+// ---------------------------------------------------------------------------
+
+typedef enum {
+    TLSV2_STATE_UNUSED = 0,
+    TLSV2_STATE_HANDSHAKE,
+    TLSV2_STATE_OPEN,
+    TLSV2_STATE_CLOSING
+} tlsv2_client_state_t;
+
+typedef struct tlsv2_client_s {
+    gfns_sock_t fd;
+
+    // BearSSL engine
+    br_ssl_server_context sc;
+    br_x509_certificate   *certs;
+    size_t                 certs_len;
+    br_rsa_private_key     skey;
+
+    unsigned char iobuf[TLSV2_IOBUF_SIZE];
+    unsigned char plainbuf[TLSV2_PLAINTEXT_SIZE];
+
+    tlsv2_client_state_t state;
+
+    // JSON framing
+    unsigned char in_buf[TLSV2_MAX_JSON_SIZE + 4];
+    size_t        in_used;
+    uint32_t      expected_len;
+
+    unsigned char out_buf[TLSV2_MAX_JSON_SIZE + 4];
+    size_t        out_used;
+    size_t        out_sent;
+
+} tlsv2_client_t;
+
+
+
+// ---------------------------------------------------------------------------
+// GLOBALS
+// ---------------------------------------------------------------------------
+
+static tlsv2_client_t        g_clients[TLSV2_MAX_CLIENTS];
+static tlsv2_server_config_t g_cfg;
+static gfns_sock_t           g_listen_fd = GFNS_INVALID_SOCK;
+
+// DER buffers must stay alive
+static unsigned char        *g_cert_der_buf = NULL;
+static br_x509_certificate  *g_certs        = NULL;
+static size_t                g_certs_len    = 0;
+
+static unsigned char        *g_key_der_buf  = NULL;
+static br_rsa_private_key    g_skey;
+
+// ---------------------------------------------------------------------------
+// CLIENT INIT
+// ---------------------------------------------------------------------------
+
+static void tlsv2_clients_init(void)
+{
     for (int i = 0; i < TLSV2_MAX_CLIENTS; i++) {
-        g_clients[i].fd = -1;
+        g_clients[i].fd = GFNS_INVALID_SOCK;
         g_clients[i].state = TLSV2_STATE_UNUSED;
         g_clients[i].in_used = 0;
         g_clients[i].expected_len = 0;
@@ -234,10 +409,15 @@ static void tlsv2_clients_init(void) {
     }
 }
 
-static tlsv2_client_t *tlsv2_client_alloc(int fd,
-                                          br_x509_certificate *certs,
-                                          size_t certs_len,
-                                          const br_rsa_private_key *skey)
+// ---------------------------------------------------------------------------
+// CLIENT ALLOCATION
+// ---------------------------------------------------------------------------
+
+static tlsv2_client_t *tlsv2_client_alloc(
+    gfns_sock_t fd,
+    br_x509_certificate *certs,
+    size_t certs_len,
+    const br_rsa_private_key *skey)
 {
     for (int i = 0; i < TLSV2_MAX_CLIENTS; i++) {
         if (g_clients[i].state == TLSV2_STATE_UNUSED) {
@@ -246,18 +426,15 @@ static tlsv2_client_t *tlsv2_client_alloc(int fd,
             c->fd = fd;
             c->state = TLSV2_STATE_HANDSHAKE;
 
-            // Copy cert chain + key struct (pointers remain valid because DER buffers are global)
             c->certs = certs;
             c->certs_len = certs_len;
             c->skey = *skey;
 
-            // Reset JSON buffers
             c->in_used = 0;
             c->expected_len = 0;
             c->out_used = 0;
             c->out_sent = 0;
 
-            // Initialize BearSSL server engine
             br_ssl_server_init_full_rsa(
                 &c->sc,
                 c->certs,
@@ -265,14 +442,12 @@ static tlsv2_client_t *tlsv2_client_alloc(int fd,
                 &c->skey
             );
 
-            // Set I/O buffers
             br_ssl_engine_set_buffers_bidi(
                 &c->sc.eng,
                 c->iobuf, TLSV2_IOBUF_SIZE,
                 c->plainbuf, TLSV2_PLAINTEXT_SIZE
             );
 
-            // Start handshake
             br_ssl_server_reset(&c->sc);
 
             return c;
@@ -281,66 +456,66 @@ static tlsv2_client_t *tlsv2_client_alloc(int fd,
     return NULL;
 }
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // CLOSE CLIENT
-// ============================================================================
+// ---------------------------------------------------------------------------
 
-static void tlsv2_client_close(tlsv2_client_t *c) {
+static void tlsv2_client_close(tlsv2_client_t *c)
+{
     if (!c || c->state == TLSV2_STATE_UNUSED)
         return;
 
-    int fd = c->fd;
+    gfns_sock_t fd = c->fd;
 
-    if (fd >= 0)
-        close(fd);
+    if (fd != GFNS_INVALID_SOCK)
+        gfns_close_socket(fd);
 
-    c->fd = -1;
+    c->fd = GFNS_INVALID_SOCK;
     c->state = TLSV2_STATE_UNUSED;
 
-    if (g_cfg.on_client_disconnected && fd >= 0)
-        g_cfg.on_client_disconnected(fd);
+    if (g_cfg.on_client_disconnected && fd != GFNS_INVALID_SOCK)
+        g_cfg.on_client_disconnected((int)fd);
 }
 
-// ============================================================================
-// ACCEPT NEW CLIENT (NON-BLOCKING)
-// ============================================================================
+// ---------------------------------------------------------------------------
+// ACCEPT NEW CLIENTS (NON‑BLOCKING)
+// ---------------------------------------------------------------------------
 
-static void tlsv2_accept_new_client(br_x509_certificate *certs,
-                                    size_t certs_len,
-                                    const br_rsa_private_key *skey)
+static void tlsv2_accept_new_client(
+    br_x509_certificate *certs,
+    size_t certs_len,
+    const br_rsa_private_key *skey)
 {
     for (;;) {
-        int client_fd = accept(g_listen_fd, NULL, NULL);
-        if (client_fd < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
+        gfns_sock_t client_fd = accept(g_listen_fd, NULL, NULL);
+        if (client_fd == GFNS_INVALID_SOCK) {
+            if (gfns_would_block())
                 break;
-            perror("accept");
             break;
         }
 
-        if (make_nonblocking(client_fd) < 0) {
-            perror("fcntl");
-            close(client_fd);
+        if (gfns_set_nonblocking(client_fd) < 0) {
+            gfns_close_socket(client_fd);
             continue;
         }
 
         tlsv2_client_t *c = tlsv2_client_alloc(client_fd, certs, certs_len, skey);
         if (!c) {
-            fprintf(stderr, "[tlsv2] Max clients reached\n");
-            close(client_fd);
+            gfns_close_socket(client_fd);
             continue;
         }
 
         if (g_cfg.on_client_connected)
-            g_cfg.on_client_connected(client_fd);
+            g_cfg.on_client_connected((int)client_fd);
     }
 }
 
-// ============================================================================
-// TLS ENGINE: FEED SOCKET → ENGINE (encrypted input)
-// ============================================================================
+// ---------------------------------------------------------------------------
+// TLS ENGINE: RECV ENCRYPTED
+// ---------------------------------------------------------------------------
 
-static int tlsv2_engine_recv(tlsv2_client_t *c) {
+static int tlsv2_engine_recv(tlsv2_client_t *c)
+{
     unsigned char *buf;
     size_t len;
 
@@ -354,22 +529,23 @@ static int tlsv2_engine_recv(tlsv2_client_t *c) {
         if (len == 0)
             return 0;
 
-        int r = read(c->fd, buf, len);
+        int r = tls_low_read(&c->fd, buf, len);
         if (r > 0) {
             br_ssl_engine_recvrec_ack(&c->sc.eng, r);
         } else {
-            if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            if (gfns_would_block())
                 return 0;
             return -1;
         }
     }
 }
 
-// ============================================================================
-// TLS ENGINE: FEED ENGINE → SOCKET (encrypted output)
-// ============================================================================
+// ---------------------------------------------------------------------------
+// TLS ENGINE: SEND ENCRYPTED
+// ---------------------------------------------------------------------------
 
-static int tlsv2_engine_send(tlsv2_client_t *c) {
+static int tlsv2_engine_send(tlsv2_client_t *c)
+{
     unsigned char *buf;
     size_t len;
 
@@ -383,22 +559,23 @@ static int tlsv2_engine_send(tlsv2_client_t *c) {
         if (len == 0)
             return 0;
 
-        int r = write(c->fd, buf, len);
+        int r = tls_low_write(&c->fd, buf, len);
         if (r > 0) {
             br_ssl_engine_sendrec_ack(&c->sc.eng, r);
         } else {
-            if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            if (gfns_would_block())
                 return 0;
             return -1;
         }
     }
 }
 
-// ============================================================================
-// TLS ENGINE: READ PLAINTEXT FROM ENGINE → JSON FRAMING
-// ============================================================================
+// ---------------------------------------------------------------------------
+// TLS ENGINE: READ PLAINTEXT → JSON
+// ---------------------------------------------------------------------------
 
-static int tlsv2_engine_read_plain(tlsv2_client_t *c) {
+static int tlsv2_engine_read_plain(tlsv2_client_t *c)
+{
     unsigned char *buf;
     size_t len;
 
@@ -428,9 +605,7 @@ static int tlsv2_engine_read_plain(tlsv2_client_t *c) {
                     c->expected_len = ntohl(nlen);
                     if (c->expected_len > TLSV2_MAX_JSON_SIZE)
                         return -1;
-                } else {
-                    break;
-                }
+                } else break;
             }
 
             if (c->expected_len > 0 &&
@@ -450,21 +625,20 @@ static int tlsv2_engine_read_plain(tlsv2_client_t *c) {
                 c->expected_len = 0;
 
                 if (g_cfg.on_json_received)
-                    g_cfg.on_json_received(c->fd, json, json_len);
+                    g_cfg.on_json_received((int)c->fd, json, json_len);
 
                 free(json);
-            } else {
-                break;
-            }
+            } else break;
         }
     }
 }
 
-// ============================================================================
-// TLS ENGINE: WRITE PLAINTEXT → ENGINE (JSON OUT)
-// ============================================================================
+// ---------------------------------------------------------------------------
+// TLS ENGINE: WRITE PLAINTEXT (JSON OUT)
+// ---------------------------------------------------------------------------
 
-static int tlsv2_engine_write_plain(tlsv2_client_t *c) {
+static int tlsv2_engine_write_plain(tlsv2_client_t *c)
+{
     if (c->out_sent >= c->out_used)
         return 0;
 
@@ -498,11 +672,12 @@ static int tlsv2_engine_write_plain(tlsv2_client_t *c) {
     }
 }
 
-// ============================================================================
-// HANDLE CLIENT (READ + WRITE + HANDSHAKE)
-// ============================================================================
+// ---------------------------------------------------------------------------
+// HANDLE CLIENT
+// ---------------------------------------------------------------------------
 
-static void tlsv2_handle_client(tlsv2_client_t *c) {
+static void tlsv2_handle_client(tlsv2_client_t *c)
+{
     if (!c || c->state == TLSV2_STATE_UNUSED)
         return;
 
@@ -538,18 +713,20 @@ static void tlsv2_handle_client(tlsv2_client_t *c) {
         tlsv2_client_close(c);
 }
 
-// ============================================================================
-// PUBLIC API: SEND JSON TO CLIENT
-// ============================================================================
+// ---------------------------------------------------------------------------
+// SEND JSON TO CLIENT
+// ---------------------------------------------------------------------------
 
-int tlsv2_send_json(int client_id, const char *json, size_t len) {
+int tlsv2_send_json(int client_id, const char *json, size_t len)
+{
     if (len > TLSV2_MAX_JSON_SIZE)
         return -1;
 
     for (int i = 0; i < TLSV2_MAX_CLIENTS; i++) {
         tlsv2_client_t *c = &g_clients[i];
-        if (c->state != TLSV2_STATE_UNUSED && c->fd == client_id) {
-
+        if (c->state != TLSV2_STATE_UNUSED &&
+            (int)c->fd == client_id)
+        {
             if (c->out_used != c->out_sent)
                 return -2;
 
@@ -565,56 +742,14 @@ int tlsv2_send_json(int client_id, const char *json, size_t len) {
     return -1;
 }
 
-// ============================================================================
-// CREATE LISTEN SOCKET
-// ============================================================================
+// ---------------------------------------------------------------------------
+// MAIN SERVER LOOP (LINUX: select, WINDOWS: WSAPoll)
+// ---------------------------------------------------------------------------
 
-static int tlsv2_create_listen_socket(int port) {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        perror("socket");
+int tlsv2_server_run(const tlsv2_server_config_t *cfg)
+{
+    if (!cfg || !cfg->cert_file || !cfg->key_file)
         return -1;
-    }
-
-    int opt = 1;
-    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family      = AF_INET;
-    addr.sin_port        = htons(port);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        perror("bind");
-        close(sock);
-        return -1;
-    }
-
-    if (listen(sock, 16) < 0) {
-        perror("listen");
-        close(sock);
-        return -1;
-    }
-
-    if (make_nonblocking(sock) < 0) {
-        perror("fcntl");
-        close(sock);
-        return -1;
-    }
-
-    return sock;
-}
-
-// ============================================================================
-// MAIN SERVER LOOP
-// ============================================================================
-
-int tlsv2_server_run(const tlsv2_server_config_t *cfg) {
-    if (!cfg || !cfg->cert_file || !cfg->key_file) {
-        fprintf(stderr, "[tlsv2] Invalid server config\n");
-        return -1;
-    }
 
     g_cfg = *cfg;
 
@@ -622,27 +757,62 @@ int tlsv2_server_run(const tlsv2_server_config_t *cfg) {
                              &g_certs,
                              &g_certs_len,
                              &g_cert_der_buf) < 0)
-    {
-        fprintf(stderr, "[tlsv2] Failed to load DER certificate\n");
         return -1;
-    }
 
     if (load_rsa_key_der(cfg->key_file,
                          &g_skey,
                          &g_key_der_buf) < 0)
-    {
-        fprintf(stderr, "[tlsv2] Failed to load DER RSA key\n");
         return -1;
-    }
 
     tlsv2_clients_init();
 
-    g_listen_fd = tlsv2_create_listen_socket(cfg->port);
-    if (g_listen_fd < 0)
+    g_listen_fd = gfns_create_listen_socket(cfg->port);
+    if (g_listen_fd == GFNS_INVALID_SOCK)
         return -1;
 
-    fprintf(stderr, "[tlsv2] Server listening on port %d\n", cfg->port);
+#ifdef _WIN32
+    // ---------------- WINDOWS: WSAPoll ----------------
+    for (;;) {
+        WSAPOLLFD fds[TLSV2_MAX_CLIENTS + 1];
+        int nfds = 0;
 
+        fds[nfds].fd = g_listen_fd;
+        fds[nfds].events = POLLRDNORM;
+        nfds++;
+
+        for (int i = 0; i < TLSV2_MAX_CLIENTS; i++) {
+            if (g_clients[i].state != TLSV2_STATE_UNUSED) {
+                fds[nfds].fd = g_clients[i].fd;
+                fds[nfds].events = POLLRDNORM | POLLWRNORM;
+                nfds++;
+            }
+        }
+
+        int ret = WSAPoll(fds, nfds, -1);
+        if (ret <= 0)
+            continue;
+
+        int idx = 0;
+
+        if (fds[idx].revents & POLLRDNORM)
+            tlsv2_accept_new_client(g_certs, g_certs_len, &g_skey);
+
+        idx++;
+
+        for (int i = 0; i < TLSV2_MAX_CLIENTS; i++) {
+            tlsv2_client_t *c = &g_clients[i];
+            if (c->state == TLSV2_STATE_UNUSED)
+                continue;
+
+            if (fds[idx].revents & (POLLRDNORM | POLLWRNORM))
+                tlsv2_handle_client(c);
+
+            idx++;
+        }
+    }
+
+#else
+    // ---------------- LINUX: select ----------------
     for (;;) {
         fd_set readfds, writefds;
         FD_ZERO(&readfds);
@@ -664,16 +834,11 @@ int tlsv2_server_run(const tlsv2_server_config_t *cfg) {
         }
 
         int ret = select(maxfd + 1, &readfds, &writefds, NULL, NULL);
-        if (ret < 0) {
-            if (errno == EINTR)
-                continue;
-            perror("select");
-            break;
-        }
+        if (ret < 0)
+            continue;
 
-        if (FD_ISSET(g_listen_fd, &readfds)) {
+        if (FD_ISSET(g_listen_fd, &readfds))
             tlsv2_accept_new_client(g_certs, g_certs_len, &g_skey);
-        }
 
         for (int i = 0; i < TLSV2_MAX_CLIENTS; i++) {
             tlsv2_client_t *c = &g_clients[i];
@@ -687,22 +852,20 @@ int tlsv2_server_run(const tlsv2_server_config_t *cfg) {
             }
         }
     }
-
-    close(g_listen_fd);
-    g_listen_fd = -1;
-
-    for (int i = 0; i < TLSV2_MAX_CLIENTS; i++)
-        tlsv2_client_close(&g_clients[i]);
+#endif
 
     return 0;
 }
 
+
 // ============================================================================
-// CLIENT SIDE (BLOCKING, PB-FRIENDLY) — BearSSL br_sslio
+// SECTION 3 — TLS CLIENT (BLOCKING, PB‑FRIENDLY)
+// Cross‑platform: Linux + Windows
 // ============================================================================
 
 typedef struct tlsv2_client_conn_s {
-    int   sock;
+    gfns_sock_t sock;
+
     br_ssl_client_context sc;
     br_x509_minimal_context xc;
     br_sslio_context ioc;
@@ -715,7 +878,12 @@ typedef struct tlsv2_client_conn_s {
 #define TLSV2_MAX_CLIENT_CONNS 64
 static tlsv2_client_conn_t *g_client_conns[TLSV2_MAX_CLIENT_CONNS] = {0};
 
-static void tlsv2_register_client_conn(tlsv2_client_conn_t *c) {
+// ---------------------------------------------------------------------------
+// REGISTER / LOOKUP / UNREGISTER
+// ---------------------------------------------------------------------------
+
+static void tlsv2_register_client_conn(tlsv2_client_conn_t *c)
+{
     for (int i = 0; i < TLSV2_MAX_CLIENT_CONNS; i++) {
         if (!g_client_conns[i]) {
             g_client_conns[i] = c;
@@ -724,7 +892,8 @@ static void tlsv2_register_client_conn(tlsv2_client_conn_t *c) {
     }
 }
 
-static tlsv2_client_conn_t *tlsv2_lookup_client_conn(int sock) {
+static tlsv2_client_conn_t *tlsv2_lookup_client_conn(gfns_sock_t sock)
+{
     for (int i = 0; i < TLSV2_MAX_CLIENT_CONNS; i++) {
         if (g_client_conns[i] && g_client_conns[i]->sock == sock)
             return g_client_conns[i];
@@ -732,7 +901,8 @@ static tlsv2_client_conn_t *tlsv2_lookup_client_conn(int sock) {
     return NULL;
 }
 
-static void tlsv2_unregister_client_conn(int sock) {
+static void tlsv2_unregister_client_conn(gfns_sock_t sock)
+{
     for (int i = 0; i < TLSV2_MAX_CLIENT_CONNS; i++) {
         if (g_client_conns[i] && g_client_conns[i]->sock == sock) {
             g_client_conns[i] = NULL;
@@ -741,77 +911,78 @@ static void tlsv2_unregister_client_conn(int sock) {
     }
 }
 
-// ============================================================================
-// CLIENT INIT
-// ============================================================================
+// ---------------------------------------------------------------------------
+// CLIENT INIT (NO‑OP FOR NOW)
+// ---------------------------------------------------------------------------
 
-int tlsv2_client_init(void) {
+int tlsv2_client_init(void)
+{
+    gfns_net_init();   // Windows: WSAStartup
     return 0;
 }
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // CLIENT CONNECT (BLOCKING)
-// ============================================================================
+// ---------------------------------------------------------------------------
 
-int tlsv2_client_connect(const char *host, int port) {
+int tlsv2_client_connect(const char *host, int port)
+{
     tlsv2_client_conn_t *c = calloc(1, sizeof(tlsv2_client_conn_t));
-    if (!c) return -1;
+    if (!c)
+        return -1;
 
-    c->sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (c->sock < 0) {
+    gfns_sock_t s = gfns_connect_blocking(host, port);
+    if (s == GFNS_INVALID_SOCK) {
         free(c);
         return -1;
     }
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) <= 0) {
-        close(c->sock);
-        free(c);
-        return -1;
-    }
+    c->sock = s;
 
-    if (connect(c->sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        close(c->sock);
-        free(c);
-        return -2;
-    }
-
+    // Minimal X.509 (no CA, no verification)
     br_x509_minimal_init(&c->xc, &br_sha256_vtable, NULL, 0);
+
+    // Full client engine
     br_ssl_client_init_full(&c->sc, &c->xc, NULL, 0);
 
+    // Buffers
     br_ssl_engine_set_buffers_bidi(
         &c->sc.eng,
         c->iobuf, TLSV2_IOBUF_SIZE,
         c->plainbuf, TLSV2_PLAINTEXT_SIZE
     );
 
+    // Start handshake
     br_ssl_client_reset(&c->sc, host, 0);
 
-    br_sslio_init(&c->ioc,
-              &c->sc.eng,
-              tls_low_read,  &c->sock,
-              tls_low_write, &c->sock);
+    // I/O wrapper
+    br_sslio_init(
+        &c->ioc,
+        &c->sc.eng,
+        tls_low_read,  &c->sock,
+        tls_low_write, &c->sock
+    );
 
+    // Complete handshake
     if (br_sslio_flush(&c->ioc) < 0) {
-        close(c->sock);
+        gfns_close_socket(c->sock);
         free(c);
-        return -3;
+        return -2;
     }
 
     tlsv2_register_client_conn(c);
-    return c->sock;
+    return (int)c->sock;
 }
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // CLIENT SEND JSON (BLOCKING)
-// ============================================================================
+// ---------------------------------------------------------------------------
 
-int tlsv2_client_send_json(int sock, const char *json, size_t len) {
+int tlsv2_client_send_json(int sock, const char *json, size_t len)
+{
     tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
-    if (!c) return -1;
+    if (!c)
+        return -1;
 
     if (len > TLSV2_MAX_JSON_SIZE)
         return -2;
@@ -830,13 +1001,15 @@ int tlsv2_client_send_json(int sock, const char *json, size_t len) {
     return 0;
 }
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // CLIENT RECEIVE JSON (BLOCKING)
-// ============================================================================
+// ---------------------------------------------------------------------------
 
-int tlsv2_client_recv_json(int sock, char *buf, size_t maxlen) {
+int tlsv2_client_recv_json(int sock, char *buf, size_t maxlen)
+{
     tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
-    if (!c) return -1;
+    if (!c)
+        return -1;
 
     uint32_t nlen;
 
@@ -861,15 +1034,19 @@ int tlsv2_client_recv_json(int sock, char *buf, size_t maxlen) {
     return (int)nlen;
 }
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // CLIENT CLOSE
-// ============================================================================
+// ---------------------------------------------------------------------------
 
-void tlsv2_client_close_fd(int sock) {
+void tlsv2_client_close_fd(int sock)
+{
     tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
-    if (!c) return;
+    if (!c)
+        return;
 
-    close(c->sock);
+    gfns_close_socket(c->sock);
     tlsv2_unregister_client_conn(sock);
     free(c);
 }
+
+

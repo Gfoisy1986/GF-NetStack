@@ -1,6 +1,37 @@
-gcc -shared -fPIC tls_wrapper_v3.c -o tls_wrapper_v3.so -lbearssl
+gcc -shared -fPIC \
+  tls_wrapper_v3.c \
+  -I./bearssl \
+  -o libtls_wrapper_v3.so
+
 
 gcc -c tls_wrapper_v3.c -o tls_wrapper_v3.o -lbearssl
+
+
+
+x86_64-w64-mingw32-gcc -shared \
+  tls_wrapper_v3.c \
+  bearssl/src/*.c \
+  bearssl/src/aead/*.c \
+  bearssl/src/codec/*.c \
+  bearssl/src/ec/*.c \
+  bearssl/src/hash/*.c \
+  bearssl/src/int/*.c \
+  bearssl/src/kdf/*.c \
+  bearssl/src/mac/*.c \
+  bearssl/src/rand/*.c \
+  bearssl/src/rsa/*.c \
+  bearssl/src/ssl/*.c \
+  bearssl/src/symcipher/*.c \
+  bearssl/src/x509/*.c \
+  -I./bearssl/inc \
+  -I./bearssl/src \
+  -lws2_32 \
+  -o tls_wrapper_v3.dll
+
+
+
+
+
 
 
 
