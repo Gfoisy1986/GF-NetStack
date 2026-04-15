@@ -8,7 +8,7 @@ gcc -c tls_wrapper_v3.c -o tls_wrapper_v3.o -lbearssl
 
 
 
-x86_64-w64-mingw32-gcc -shared \
+mingw-w64-ucrt-x86_64-gcc -shared \
   tls_wrapper_v3.c \
   bearssl/src/*.c \
   bearssl/src/aead/*.c \
