@@ -8,8 +8,7 @@ gcc -c tls_wrapper_v3.c -o tls_wrapper_v3.o -lbearssl
 
 
 
-x86_64-w64-mingw32-gcc -DTLSV2_BUILD_DLL -shared \
-  tls_wrapper_v3.c \
+x86_64-w64-mingw32-gcc -c \
   bearssl/src/*.c \
   bearssl/src/aead/*.c \
   bearssl/src/codec/*.c \
@@ -23,9 +22,27 @@ x86_64-w64-mingw32-gcc -DTLSV2_BUILD_DLL -shared \
   bearssl/src/ssl/*.c \
   bearssl/src/symcipher/*.c \
   bearssl/src/x509/*.c \
-  -Ibearssl/inc -Ibearssl/src \
+  -Ibearssl/inc -Ibearssl/src
+
+
+x86_64-w64-mingw32-gcc -DTLSV2_BUILD_DLL -shared \
+  tls_wrapper_v3.c \
+  bearssl/src/*.o \
+  bearssl/src/aead/*.o \
+  bearssl/src/codec/*.o \
+  bearssl/src/ec/*.o \
+  bearssl/src/hash/*.o \
+  bearssl/src/int/*.o \
+  bearssl/src/kdf/*.o \
+  bearssl/src/mac/*.o \
+  bearssl/src/rand/*.o \
+  bearssl/src/rsa/*.o \
+  bearssl/src/ssl/*.o \
+  bearssl/src/symcipher/*.o \
+  bearssl/src/x509/*.o \
   -lws2_32 \
   -o tls_wrapper_v3.dll
+
 
 
 
