@@ -8,7 +8,7 @@ gcc -c tls_wrapper_v3.c -o tls_wrapper_v3.o -lbearssl
 
 
 
-mingw-w64-ucrt-x86_64-gcc -shared \
+x86_64-w64-mingw32-gcc -DTLSV2_BUILD_DLL -shared \
   tls_wrapper_v3.c \
   bearssl/src/*.c \
   bearssl/src/aead/*.c \
@@ -23,8 +23,7 @@ mingw-w64-ucrt-x86_64-gcc -shared \
   bearssl/src/ssl/*.c \
   bearssl/src/symcipher/*.c \
   bearssl/src/x509/*.c \
-  -I./bearssl/inc \
-  -I./bearssl/src \
+  -Ibearssl/inc -Ibearssl/src \
   -lws2_32 \
   -o tls_wrapper_v3.dll
 
