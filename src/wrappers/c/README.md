@@ -48,3 +48,10 @@ fbc server_fb.bas tls_wrapper_v3.o
 fbc tls_client.bas tls_wrapper_v3.o
 
 gcc server_c.c tls_wrapper_v3.o -o server_c -lbearssl
+
+
+win:
+
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.der -outform DER -nodes -days 365
+openssl rsa -in key.pem -out key.der -outform DER
+
