@@ -8,10 +8,7 @@ extern "C" {
 #endif
 
 
-void tlsv2_set_callbacks(
-    tlsv2_on_client_connected,
-    tlsv2_on_client_disconnected,
-    tlsv2_on_json_received);
+
 
 
 // ---------------------------------------------------------------------------
@@ -33,6 +30,13 @@ typedef struct {
 
 } tlsv2_server_config_t;
 
+
+void tlsv2_set_callbacks(
+    tlsv2_on_client_connected,
+    tlsv2_on_client_disconnected,
+    tlsv2_on_json_received);
+    
+    
 // ---------------------------------------------------------------------------
 // SERVER API
 // ---------------------------------------------------------------------------
