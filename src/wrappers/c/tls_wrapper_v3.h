@@ -43,10 +43,11 @@ typedef struct {
 // SERVER API
 // ---------------------------------------------------------------------------
 
+// IMPORTANT : les paramètres doivent être nommés pour éviter les problèmes d’exports
 DLL_EXPORT void tlsv2_set_callbacks(
-    tlsv2_on_client_connected,
-    tlsv2_on_client_disconnected,
-    tlsv2_on_json_received);
+    tlsv2_on_client_connected on_conn,
+    tlsv2_on_client_disconnected on_disc,
+    tlsv2_on_json_received on_json);
 
 DLL_EXPORT int tlsv2_server_run(const tlsv2_server_config_t *cfg);
 DLL_EXPORT int tlsv2_send_json(int client_id, const char *json, size_t len);

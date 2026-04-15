@@ -717,7 +717,7 @@ static void tlsv2_handle_client(tlsv2_client_t *c)
 // SEND JSON TO CLIENT
 // ---------------------------------------------------------------------------
 
-int tlsv2_send_json(int client_id, const char *json, size_t len)
+DLL_EXPORT int tlsv2_send_json(int client_id, const char *json, size_t len)
 {
     if (len > TLSV2_MAX_JSON_SIZE)
         return -1;
@@ -746,7 +746,7 @@ int tlsv2_send_json(int client_id, const char *json, size_t len)
 // MAIN SERVER LOOP (LINUX: select, WINDOWS: WSAPoll)
 // ---------------------------------------------------------------------------
 
-int tlsv2_server_run(const tlsv2_server_config_t *cfg)
+DLL_EXPORT int tlsv2_server_run(const tlsv2_server_config_t *cfg)
 {
     if (!cfg || !cfg->cert_file || !cfg->key_file)
         return -1;
@@ -915,7 +915,7 @@ static void tlsv2_unregister_client_conn(gfns_sock_t sock)
 // CLIENT INIT (NO‑OP FOR NOW)
 // ---------------------------------------------------------------------------
 
-int tlsv2_client_init(void)
+DLL_EXPORT int tlsv2_client_init(void)
 {
     gfns_net_init();   // Windows: WSAStartup
     return 0;
@@ -925,7 +925,7 @@ int tlsv2_client_init(void)
 // CLIENT CONNECT (BLOCKING)
 // ---------------------------------------------------------------------------
 
-int tlsv2_client_connect(const char *host, int port)
+DLL_EXPORT int tlsv2_client_connect(const char *host, int port)
 {
     tlsv2_client_conn_t *c = calloc(1, sizeof(tlsv2_client_conn_t));
     if (!c)
@@ -978,7 +978,7 @@ int tlsv2_client_connect(const char *host, int port)
 // CLIENT SEND JSON (BLOCKING)
 // ---------------------------------------------------------------------------
 
-int tlsv2_client_send_json(int sock, const char *json, size_t len)
+DLL_EXPORT int tlsv2_client_send_json(int sock, const char *json, size_t len)
 {
     tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
     if (!c)
@@ -1005,7 +1005,7 @@ int tlsv2_client_send_json(int sock, const char *json, size_t len)
 // CLIENT RECEIVE JSON (BLOCKING)
 // ---------------------------------------------------------------------------
 
-int tlsv2_client_recv_json(int sock, char *buf, size_t maxlen)
+DLL_EXPORT int tlsv2_client_recv_json(int sock, char *buf, size_t maxlen)
 {
     tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
     if (!c)
@@ -1038,7 +1038,7 @@ int tlsv2_client_recv_json(int sock, char *buf, size_t maxlen)
 // CLIENT CLOSE
 // ---------------------------------------------------------------------------
 
-void tlsv2_client_close_fd(int sock)
+DLL_EXPORT void tlsv2_client_close_fd(int sock)
 {
     tlsv2_client_conn_t *c = tlsv2_lookup_client_conn(sock);
     if (!c)
