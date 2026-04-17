@@ -7,41 +7,37 @@ gcc -shared -fPIC \
 gcc -c tls_wrapper_v3.c -o tls_wrapper_v3.o -lbearssl
 
 
+build win bearssl under linux: --> .a
 
 x86_64-w64-mingw32-gcc -c \
-  bearssl/src/*.c \
-  bearssl/src/aead/*.c \
-  bearssl/src/codec/*.c \
-  bearssl/src/ec/*.c \
-  bearssl/src/hash/*.c \
-  bearssl/src/int/*.c \
-  bearssl/src/kdf/*.c \
-  bearssl/src/mac/*.c \
-  bearssl/src/rand/*.c \
-  bearssl/src/rsa/*.c \
-  bearssl/src/ssl/*.c \
-  bearssl/src/symcipher/*.c \
-  bearssl/src/x509/*.c \
-  -Ibearssl/inc -Ibearssl/src
+  src/*.c \
+  src/aead/*.c \
+  src/codec/*.c \
+  src/ec/*.c \
+  src/hash/*.c \
+  src/int/*.c \
+  src/kdf/*.c \
+  src/mac/*.c \
+  src/rand/*.c \
+  src/rsa/*.c \
+  src/ssl/*.c \
+  src/symcipher/*.c \
+  src/x509/*.c \
+  -Iinc -Isrc
 
 
-x86_64-w64-mingw32-gcc -DTLSV2_BUILD_DLL -shared \
+
+x86_64-w64-mingw32-ar rcs libbearssl.a *.o
+
+
+x86_64-w64-mingw32-gcc -shared \
   tls_wrapper_v3.c \
-  bearssl/src/*.o \
-  bearssl/src/aead/*.o \
-  bearssl/src/codec/*.o \
-  bearssl/src/ec/*.o \
-  bearssl/src/hash/*.o \
-  bearssl/src/int/*.o \
-  bearssl/src/kdf/*.o \
-  bearssl/src/mac/*.o \
-  bearssl/src/rand/*.o \
-  bearssl/src/rsa/*.o \
-  bearssl/src/ssl/*.o \
-  bearssl/src/symcipher/*.o \
-  bearssl/src/x509/*.o \
+  -Ibearssl/inc \
+  bearssl/libbearssl.a \
   -lws2_32 \
   -o tls_wrapper_v3.dll
+
+
 
 
 
